@@ -1,0 +1,30 @@
+# Credenciales — NUNCA subir
+.env
+
+# Base de datos local
+*.db
+*.sqlite
+
+# PDFs generados
+tickets/
+cortes/
+reportes/
+
+# Imágenes de productos (opcionales)
+assets/productos/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+dist/
+build/
+*.spec
+*.egg-info/
+
+# VS Code
+.vscode/
+
+# PyInstaller
+*.manifest

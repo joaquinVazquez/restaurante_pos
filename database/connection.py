@@ -1,35 +1,39 @@
 # database/connection.py
-import os
-import psycopg2
-import psycopg2.extras
-from dotenv import load_dotenv
+import sqlite3
+from pathlib import Path
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB_PATH  = BASE_DIR / "restaurante_pos.db"
+
 
 def get_connection():
-    """Retorna una conexión activa a PostgreSQL."""
-    return psycopg2.connect(
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT"),
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD")
-    )
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
 
 def execute_query(query, params=None, fetch=True):
-    """
-    Ejecuta una consulta SQL de forma segura.
-    fetch=True  → SELECT
-    fetch=False → INSERT/UPDATE/DELETE
-    """
+    # Convertir sintaxis PostgreSQL → SQLite
+    query = query.replace("%s", "?")
+    query = query.replace("CURRENT_DATE", "DATE('now')")
+    query = query.replace("CURRENT_TIMESTAMP", "DATETIME('now')")
+    query = query.replace("TRUE",  "1")
+    query = query.replace("FALSE", "0")
+
     conn = get_connection()
     try:
-        with conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(query, params)
-                if fetch:
-                    return cur.fetchall()
-                else:
-                    return cur.rowcount
+        cursor = conn.cursor()
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+
+        if fetch:
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        else:
+            conn.commit()
+            return cursor.lastrowid
     finally:
         conn.close()

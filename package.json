@@ -1,0 +1,24 @@
+{
+  "name": "restaurante_pos",
+  "version": "1.0.0",
+  "description": "Sistema de punto de venta para restaurantes.\r Desarrollado con Python + Flet + SQLite.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scarlyPadilla/restaurante_pos.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/scarlyPadilla/restaurante_pos/issues"
+  },
+  "homepage": "https://github.com/scarlyPadilla/restaurante_pos#readme",
+  "dependencies": {
+    "convex": "^1.41.0"
+  }
+}

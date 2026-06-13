@@ -28,3 +28,4 @@ build/
 
 # PyInstaller
 *.manifest
+.env.local

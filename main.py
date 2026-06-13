@@ -19,6 +19,8 @@ BREAKPOINT_MOVIL = 800
 BOTTOM_NAV_H     = 72
 
 inicializar_bd()
+from database.db_manager import verificar_conexion
+verificar_conexion()
 
 
 def es_movil(page: ft.Page) -> bool:

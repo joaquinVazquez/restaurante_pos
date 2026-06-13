@@ -1,31 +1,16 @@
 # controllers/ventas_controller.py
-from database.connection import execute_query
+from database.db_manager import get_categorias, get_productos
+
 
 def obtener_categorias():
-    return execute_query(
-        "SELECT id, nombre, icono FROM categorias WHERE activo = TRUE ORDER BY nombre"
-    )
+    return get_categorias()
+
 
 def obtener_productos(categoria_id=None, busqueda=None):
-    query = """
-        SELECT p.id, p.nombre, p.descripcion, p.precio, p.stock,
-               c.nombre AS categoria, c.icono
-        FROM productos p
-        LEFT JOIN categorias c ON p.categoria_id = c.id
-        WHERE p.activo = TRUE AND p.stock > 0
-    """
-    params = []
-
-    if categoria_id:
-        query += " AND p.categoria_id = %s"
-        params.append(categoria_id)
-
-    if busqueda:
-        query += " AND LOWER(p.nombre) LIKE LOWER(%s)"
-        params.append(f"%{busqueda}%")
-
-    query += " ORDER BY p.nombre"
-    return execute_query(query, params if params else None)
+    return get_productos(
+        busqueda=busqueda,
+        categoria_id=categoria_id
+    )
 
 
 class Carrito:
@@ -38,7 +23,7 @@ class Carrito:
             if self.items[pid]["cantidad"] < producto["stock"]:
                 self.items[pid]["cantidad"] += 1
             else:
-                return False, f"⚠️ Stock máximo: {producto['stock']} unidades"
+                return False, f"⚠️ Stock máximo: {producto['stock']}"
         else:
             self.items[pid] = {
                 "nombre":   producto["nombre"],
@@ -48,7 +33,7 @@ class Carrito:
             }
         return True, "ok"
 
-    def quitar(self, producto_id: int):
+    def quitar(self, producto_id):
         if producto_id in self.items:
             if self.items[producto_id]["cantidad"] > 1:
                 self.items[producto_id]["cantidad"] -= 1
@@ -59,7 +44,10 @@ class Carrito:
         self.items = {}
 
     def total(self) -> float:
-        return sum(v["precio"] * v["cantidad"] for v in self.items.values())
+        return sum(
+            v["precio"] * v["cantidad"]
+            for v in self.items.values()
+        )
 
     def cantidad_items(self) -> int:
         return sum(v["cantidad"] for v in self.items.values())

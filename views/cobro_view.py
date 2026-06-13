@@ -2,7 +2,7 @@
 import flet as ft
 import os
 from datetime import datetime
-from database.connection import execute_query
+from database.db_manager import crear_venta
 
 COLOR_TEXTO      = "#2c3e50"
 COLOR_SUBTEXTO   = "#7f8c8d"
@@ -21,7 +21,8 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
     total          = carrito.total()
 
     lbl_cambio = ft.Text("$0.00", size=22,
-                         weight=ft.FontWeight.BOLD, color=COLOR_ACENTO)
+                         weight=ft.FontWeight.BOLD,
+                         color=COLOR_ACENTO)
     lbl_estado = ft.Text("", size=13, color=COLOR_ROJO)
 
     # ── Resumen orden ──────────────────────────────────────
@@ -37,16 +38,19 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
                                 max_lines=1,
                                 overflow=ft.TextOverflow.ELLIPSIS),
                         ft.Text(f"x{item['cantidad']}",
-                                size=12, color=COLOR_SUBTEXTO, width=30),
+                                size=12, color=COLOR_SUBTEXTO,
+                                width=30),
                         ft.Text(f"${sub:.2f}", size=13,
                                 color=COLOR_TEXTO,
-                                weight=ft.FontWeight.BOLD, width=65,
+                                weight=ft.FontWeight.BOLD,
+                                width=65,
                                 text_align=ft.TextAlign.RIGHT),
                     ],
                 ),
                 bgcolor=COLOR_FONDO,
                 border_radius=8,
-                padding=ft.padding.symmetric(horizontal=12, vertical=8)
+                padding=ft.padding.symmetric(
+                    horizontal=12, vertical=8)
             )
         )
 
@@ -102,7 +106,8 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
                 ft.Row(controls=[campo_monto]),
                 ft.Row(
                     controls=[
-                        ft.Text("Cambio:", size=14, color=COLOR_SUBTEXTO),
+                        ft.Text("Cambio:", size=14,
+                                color=COLOR_SUBTEXTO),
                         lbl_cambio
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN
@@ -139,13 +144,16 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
             pdf.set_margins(15, 15, 15)
 
             pdf.set_font("Helvetica", "B", 16)
-            pdf.cell(0, 10, "RestaurantePOS", ln=True, align="C")
+            pdf.cell(0, 10, "RestaurantePOS",
+                     ln=True, align="C")
             pdf.set_font("Helvetica", "", 10)
-            pdf.cell(0, 6, "Ticket de Venta", ln=True, align="C")
+            pdf.cell(0, 6, "Ticket de Venta",
+                     ln=True, align="C")
             pdf.cell(0, 6,
                      datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
                      ln=True, align="C")
-            pdf.cell(0, 6, f"Venta #: {venta_id}", ln=True, align="C")
+            pdf.cell(0, 6, f"Venta #: {venta_id}",
+                     ln=True, align="C")
             pdf.ln(4)
             pdf.line(15, pdf.get_y(), 195, pdf.get_y())
             pdf.ln(4)
@@ -167,7 +175,8 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
                          border=0, align="C")
                 pdf.cell(35, 7, f"${item['precio']:.2f}",
                          border=0, align="R")
-                pdf.cell(35, 7, f"${sub:.2f}", border=0, align="R")
+                pdf.cell(35, 7, f"${sub:.2f}",
+                         border=0, align="R")
                 pdf.ln()
 
             pdf.ln(2)
@@ -176,21 +185,24 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
 
             pdf.set_font("Helvetica", "B", 12)
             pdf.cell(150, 8, "TOTAL:", border=0, align="R")
-            pdf.cell(35, 8, f"${total:.2f}", border=0, align="R")
+            pdf.cell(35, 8, f"${total:.2f}",
+                     border=0, align="R")
             pdf.ln()
 
             pdf.set_font("Helvetica", "", 10)
             pdf.cell(
                 150, 7,
-                f"Método de pago: {metodo_pago['valor'].capitalize()}",
+                f"Método: {metodo_pago['valor'].capitalize()}",
                 border=0, align="R"
             )
             pdf.ln()
 
             if metodo_pago["valor"] == "efectivo":
-                pdf.cell(150, 7,
-                         f"Recibido: ${monto_recibido['valor']:.2f}",
-                         border=0, align="R")
+                pdf.cell(
+                    150, 7,
+                    f"Recibido: ${monto_recibido['valor']:.2f}",
+                    border=0, align="R"
+                )
                 pdf.ln()
                 cambio = monto_recibido["valor"] - total
                 pdf.set_font("Helvetica", "B", 10)
@@ -202,14 +214,13 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
             pdf.set_font("Helvetica", "I", 9)
             pdf.cell(0, 6, "¡Gracias por su compra!",
                      ln=True, align="C")
-            pdf.cell(0, 6, "Vuelva pronto", ln=True, align="C")
 
             os.makedirs("tickets", exist_ok=True)
             ruta = f"tickets/ticket_{venta_id}.pdf"
             pdf.output(ruta)
             return ruta
         except Exception as ex:
-            print(f"Error generando PDF: {ex}")
+            print(f"Error PDF: {ex}")
             return None
 
     # ── Confirmar venta ────────────────────────────────────
@@ -218,7 +229,7 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
             try:
                 monto = float(campo_monto.value or 0)
                 if monto < total:
-                    lbl_estado.value = "⚠️ El monto recibido es insuficiente"
+                    lbl_estado.value = "⚠️ Monto insuficiente"
                     page.update()
                     return
             except ValueError:
@@ -227,35 +238,39 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
                 return
 
         try:
-            monto_r  = monto_recibido["valor"] if metodo_pago["valor"] == "efectivo" else None
-            cambio_r = (monto_recibido["valor"] - total) if metodo_pago["valor"] == "efectivo" else None
+            # ── Armar datos ────────────────────────────────
+            monto_r  = monto_recibido["valor"] \
+                if metodo_pago["valor"] == "efectivo" else None
+            cambio_r = (monto_recibido["valor"] - total) \
+                if metodo_pago["valor"] == "efectivo" else None
 
-            resultado = execute_query("""
-                INSERT INTO ventas
-                    (usuario_id, total, metodo_pago, monto_recibido, cambio)
-                VALUES (1, %s, %s, %s, %s)
-                RETURNING id
-            """, [total, metodo_pago["valor"], monto_r, cambio_r])
+            datos = {
+                "total":          total,
+                "metodo_pago":    metodo_pago["valor"],
+                "monto_recibido": monto_r,
+                "cambio":         cambio_r,
+            }
 
-            venta_id = resultado[0]["id"]
+            # ── Armar items ────────────────────────────────
+            items = [
+                {
+                    "producto_id":    str(pid),
+                    "cantidad":       item["cantidad"],
+                    "precio_unitario": item["precio"],
+                    "subtotal":       item["precio"] * item["cantidad"],
+                }
+                for pid, item in carrito.items.items()
+            ]
 
-            for pid, item in carrito.items.items():
-                execute_query("""
-                    INSERT INTO detalle_ventas
-                        (venta_id, producto_id, cantidad, precio_unitario)
-                    VALUES (%s, %s, %s, %s)
-                """, [venta_id, pid, item["cantidad"],
-                      item["precio"]], fetch=False)
+            # ── Crear venta en Convex o SQLite ─────────────
+            venta_id = crear_venta(datos, items)
 
-                execute_query("""
-                    UPDATE productos SET stock = stock - %s WHERE id = %s
-                """, [item["cantidad"], pid], fetch=False)
-
+            # ── Generar PDF ────────────────────────────────
             ruta_pdf = generar_ticket_pdf(venta_id)
 
-            # ── Diálogo de éxito ───────────────────────────
+            # ── Diálogo éxito ──────────────────────────────
             def cerrar_y_volver(e):
-                dialogo_exito.open = False
+                dialogo_ok.open = False
                 carrito.vaciar()
                 on_venta_completada()
                 page.update()
@@ -268,42 +283,32 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
                         shell=True
                     )
 
-            dialogo_exito = ft.AlertDialog(
+            dialogo_ok = ft.AlertDialog(
                 modal=True,
                 title=ft.Text("✅ Venta Completada",
                               weight=ft.FontWeight.BOLD),
                 content=ft.Column(
                     controls=[
                         ft.Text(
-                            f"Venta #{venta_id} registrada exitosamente",
+                            f"Venta #{venta_id} registrada",
                             size=14, color=COLOR_TEXTO),
-                        ft.Text(f"Total cobrado: ${total:.2f}",
-                                size=13, color=COLOR_SUBTEXTO),
+                        ft.Text(f"Total: ${total:.2f}",
+                                size=13, color=COLOR_ACENTO,
+                                weight=ft.FontWeight.BOLD),
                         ft.Text(
                             f"Cambio: ${(monto_recibido['valor'] - total):.2f}"
                             if metodo_pago["valor"] == "efectivo"
-                            else "Pago con tarjeta",
-                            size=13, color=COLOR_ACENTO
-                        ),
-                        ft.Divider(),
-                        ft.Text("📄 Ticket guardado en:",
-                                size=11, color=COLOR_SUBTEXTO),
-                        ft.Text(
-                            ruta_pdf or "No se pudo generar",
-                            size=10, color=COLOR_SUBTEXTO,
-                            italic=True
-                        ),
+                            else "Pago con tarjeta ✅",
+                            size=13, color=COLOR_SUBTEXTO),
                     ],
                     spacing=8,
                     tight=True
                 ),
                 actions=[
-                    ft.TextButton(
-                        "Nueva Venta",
-                        on_click=cerrar_y_volver
-                    ),
+                    ft.TextButton("Nueva Venta",
+                                  on_click=cerrar_y_volver),
                     ft.ElevatedButton(
-                        "📄 Abrir Ticket PDF",
+                        "📄 Ver Ticket",
                         bgcolor=COLOR_AZUL,
                         color="white",
                         on_click=abrir_pdf
@@ -312,14 +317,15 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
                 actions_alignment=ft.MainAxisAlignment.END,
             )
 
-            if dialogo_exito not in page.overlay:
-                page.overlay.append(dialogo_exito)
-            dialogo_exito.open = True
+            if dialogo_ok not in page.overlay:
+                page.overlay.append(dialogo_ok)
+            dialogo_ok.open = True
             page.update()
 
         except Exception as ex:
             page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"❌ Error: {ex}", color="white"),
+                content=ft.Text(f"❌ Error: {ex}",
+                                color="white"),
                 bgcolor=COLOR_ROJO
             )
             page.snack_bar.open = True
@@ -331,7 +337,8 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
             ft.Row(
                 controls=[
                     ft.Text("💳 Cobro", size=22,
-                            weight=ft.FontWeight.BOLD, color=COLOR_TEXTO),
+                            weight=ft.FontWeight.BOLD,
+                            color=COLOR_TEXTO),
                     ft.Container(expand=True),
                     ft.TextButton(
                         "← Regresar",
@@ -343,11 +350,10 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
             ft.Container(height=8),
             ft.Row(
                 controls=[
-                    # Panel izquierdo
                     ft.Container(
                         content=ft.Column(
                             controls=[
-                                ft.Text("📋 Resumen de Orden", size=15,
+                                ft.Text("📋 Resumen", size=15,
                                         weight=ft.FontWeight.BOLD,
                                         color=COLOR_TEXTO),
                                 ft.Divider(),
@@ -363,7 +369,8 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
                                         ft.Text("TOTAL", size=16,
                                                 weight=ft.FontWeight.BOLD,
                                                 color=COLOR_TEXTO),
-                                        ft.Text(f"${total:.2f}", size=22,
+                                        ft.Text(f"${total:.2f}",
+                                                size=22,
                                                 weight=ft.FontWeight.BOLD,
                                                 color=COLOR_ACENTO)
                                     ],
@@ -383,16 +390,19 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
                             offset=ft.Offset(0, 2)
                         )
                     ),
-                    # Panel derecho
                     ft.Container(
                         content=ft.Column(
                             controls=[
-                                ft.Text("💰 Método de Pago", size=15,
+                                ft.Text("💰 Método de Pago",
+                                        size=15,
                                         weight=ft.FontWeight.BOLD,
                                         color=COLOR_TEXTO),
                                 ft.Divider(),
                                 ft.Row(
-                                    controls=[btn_efectivo, btn_tarjeta],
+                                    controls=[
+                                        btn_efectivo,
+                                        btn_tarjeta
+                                    ],
                                     spacing=10
                                 ),
                                 ft.Container(height=8),

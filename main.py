@@ -82,6 +82,9 @@ def main(page: ft.Page):
             contenido = caja_view(page)
         elif modulo == "clientes":
             contenido = clientes_view(page)
+        elif modulo == "config":
+            from views.config_view import config_view
+            contenido = config_view(page, usuario_actual=usuario)
         else:
             contenido = ft.Column(
                 controls=[

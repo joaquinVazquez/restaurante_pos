@@ -291,6 +291,7 @@ def guardar_configuracion(datos: dict):
         "telefono":  "restaurante_telefono",
         "email":     "restaurante_email",
         "rfc":       "restaurante_rfc",
+        "logo":      "restaurante_logo",
     }
     for campo, clave in claves.items():
         valor = datos.get(campo, "")

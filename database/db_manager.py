@@ -272,3 +272,180 @@ def get_clientes(busqueda=""):
                 OR LOWER(COALESCE(c.telefono,'')) LIKE LOWER(?))
             GROUP BY c.id ORDER BY c.nombre
         """, [f"%{busqueda}%", f"%{busqueda}%"]) or []
+        # ── Configuración ──────────────────────────────────────────
+def get_configuracion() -> dict:
+    if usando_convex():
+        items = convex_query("configuracion:listar") or []
+        return {i["clave"]: i["valor"] for i in items}
+    else:
+        items = sqlite_query(
+            "SELECT clave, valor FROM configuracion"
+        ) or []
+        return {i["clave"]: i["valor"] for i in items}
+
+
+def guardar_configuracion(datos: dict):
+    claves = {
+        "nombre":    "restaurante_nombre",
+        "direccion": "restaurante_direccion",
+        "telefono":  "restaurante_telefono",
+        "email":     "restaurante_email",
+        "rfc":       "restaurante_rfc",
+    }
+    for campo, clave in claves.items():
+        valor = datos.get(campo, "")
+        if usando_convex():
+            convex_mutation("configuracion:guardar", {
+                "clave": clave, "valor": valor
+            })
+        else:
+            sqlite_query("""
+                INSERT INTO configuracion (clave, valor)
+                VALUES (?, ?)
+                ON CONFLICT(clave) DO UPDATE SET valor=?
+            """, [clave, valor, valor], fetch=False)
+
+
+def get_config_impresora() -> dict:
+    config = get_configuracion()
+    return {
+        "nombre_impresora": config.get("impresora_nombre", ""),
+        "ancho_papel":      config.get("impresora_ancho", "80"),
+        "mensaje_ticket":   config.get("ticket_mensaje",
+                                       "¡Gracias por su compra!"),
+    }
+
+
+def guardar_config_impresora(datos: dict):
+    claves = {
+        "nombre_impresora": "impresora_nombre",
+        "ancho_papel":      "impresora_ancho",
+        "mensaje_ticket":   "ticket_mensaje",
+    }
+    for campo, clave in claves.items():
+        valor = datos.get(campo, "")
+        if usando_convex():
+            convex_mutation("configuracion:guardar", {
+                "clave": clave, "valor": valor
+            })
+        else:
+            sqlite_query("""
+                INSERT INTO configuracion (clave, valor)
+                VALUES (?, ?)
+                ON CONFLICT(clave) DO UPDATE SET valor=?
+            """, [clave, valor, valor], fetch=False)
+
+
+# ── Usuarios ───────────────────────────────────────────────
+def get_usuarios():
+    if usando_convex():
+        users = convex_query("usuarios:listar") or []
+        return [{
+            "id":     u.get("_id"),
+            "nombre": u.get("nombre"),
+            "username": u.get("username"),
+            "rol":    u.get("rol"),
+            "activo": u.get("activo", True),
+        } for u in users]
+    else:
+        return sqlite_query("""
+            SELECT id, nombre, username, rol, activo
+            FROM usuarios ORDER BY nombre
+        """) or []
+
+
+def crear_usuario(datos: dict):
+    if usando_convex():
+        return convex_mutation("usuarios:crear", {
+            "nombre":        datos["nombre"],
+            "username":      datos["username"],
+            "password_hash": datos["password"],
+            "rol":           datos.get("rol", "cajero"),
+        })
+    else:
+        return sqlite_query("""
+            INSERT INTO usuarios
+                (nombre, username, password_hash, rol, activo)
+            VALUES (?, ?, ?, ?, 1)
+        """, [
+            datos["nombre"],
+            datos["username"],
+            datos["password"],
+            datos.get("rol", "cajero"),
+        ], fetch=False)
+
+
+def cambiar_password_usuario(usuario_id, password: str):
+    if usando_convex():
+        return convex_mutation("usuarios:cambiar_password", {
+            "id": usuario_id, "password_hash": password
+        })
+    else:
+        return sqlite_query("""
+            UPDATE usuarios SET password_hash=? WHERE id=?
+        """, [password, usuario_id], fetch=False)
+
+
+def toggle_usuario_activo(usuario_id, activo: bool):
+    if usando_convex():
+        return convex_mutation("usuarios:toggle_activo", {
+            "id": usuario_id, "activo": activo
+        })
+    else:
+        return sqlite_query("""
+            UPDATE usuarios SET activo=? WHERE id=?
+        """, [1 if activo else 0, usuario_id], fetch=False)
+
+
+# ── Categorías CRUD ────────────────────────────────────────
+def crear_categoria(datos: dict):
+    if usando_convex():
+        return convex_mutation("categorias:crear", {
+            "nombre": datos["nombre"],
+            "icono":  datos.get("icono", "🍽️"),
+        })
+    else:
+        return sqlite_query("""
+            INSERT INTO categorias (nombre, icono, activo)
+            VALUES (?, ?, 1)
+        """, [datos["nombre"], datos.get("icono", "🍽️")],
+            fetch=False)
+
+
+def actualizar_categoria(categoria_id, datos: dict):
+    if usando_convex():
+        return convex_mutation("categorias:actualizar", {
+            "id":     categoria_id,
+            "nombre": datos.get("nombre"),
+            "icono":  datos.get("icono"),
+        })
+    else:
+        return sqlite_query("""
+            UPDATE categorias SET nombre=?, icono=?
+            WHERE id=?
+        """, [datos.get("nombre"), datos.get("icono"),
+              categoria_id], fetch=False)
+
+
+def eliminar_categoria(categoria_id):
+    # Verificar si tiene productos activos
+    if usando_convex():
+        prods = convex_query("productos:listar",
+                             {"categoria_id": categoria_id}) or []
+        if len(prods) > 0:
+            raise Exception(
+                "⚠️ No se puede eliminar: tiene productos activos")
+        return convex_mutation("categorias:eliminar",
+                               {"id": categoria_id})
+    else:
+        prods = sqlite_query("""
+            SELECT COUNT(*) AS total FROM productos
+            WHERE categoria_id=? AND activo=1
+        """, [categoria_id])
+        if prods and prods[0]["total"] > 0:
+            raise Exception(
+                "⚠️ No se puede eliminar: tiene productos activos")
+        return sqlite_query(
+            "UPDATE categorias SET activo=0 WHERE id=?",
+            [categoria_id], fetch=False
+        )

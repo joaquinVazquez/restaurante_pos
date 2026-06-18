@@ -4,9 +4,9 @@ import { v } from "convex/values";
 
 export default defineSchema({
   categorias: defineTable({
-    nombre:    v.string(),
-    icono:     v.optional(v.string()),
-    activo:    v.boolean(),
+    nombre: v.string(),
+    icono:  v.optional(v.string()),
+    activo: v.boolean(),
   }),
 
   usuarios: defineTable({
@@ -21,6 +21,7 @@ export default defineSchema({
     nombre:       v.string(),
     descripcion:  v.optional(v.string()),
     precio:       v.number(),
+    costo:        v.optional(v.number()),
     stock:        v.number(),
     categoria_id: v.optional(v.string()),
     activo:       v.boolean(),
@@ -47,11 +48,15 @@ export default defineSchema({
   }),
 
   detalle_ventas: defineTable({
-    venta_id:       v.string(),
-    producto_id:    v.string(),
-    cantidad:       v.number(),
+    venta_id:        v.string(),
+    producto_id:     v.string(),
+    producto_nombre: v.optional(v.string()),
+    cantidad:        v.number(),
     precio_unitario: v.number(),
-    subtotal:       v.number(),
+    costo_unitario:  v.optional(v.number()),
+    subtotal:        v.number(),
+    costo_total:      v.optional(v.number()),
+    margen_total:    v.optional(v.number()),
   }),
 
   cortes_caja: defineTable({
@@ -67,5 +72,22 @@ export default defineSchema({
     clave:       v.string(),
     valor:       v.optional(v.string()),
     descripcion: v.optional(v.string()),
+  }),
+
+  gastos: defineTable({
+    categoria:   v.string(),
+    descripcion: v.string(),
+    monto:       v.number(),
+    fecha:       v.string(),
+  }),
+
+  mermas: defineTable({
+    producto_id:     v.string(),
+    producto_nombre: v.optional(v.string()),
+    cantidad:        v.number(),
+    costo_unitario:  v.number(),
+    costo_total:     v.number(),
+    motivo:          v.string(),
+    fecha:           v.string(),
   }),
 });

@@ -10,6 +10,8 @@
 
 import type * as categorias from "../categorias.js";
 import type * as configuracion from "../configuracion.js";
+import type * as gastos from "../gastos.js";
+import type * as mermas from "../mermas.js";
 import type * as productos from "../productos.js";
 import type * as usuarios from "../usuarios.js";
 import type * as ventas from "../ventas.js";
@@ -23,6 +25,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   categorias: typeof categorias;
   configuracion: typeof configuracion;
+  gastos: typeof gastos;
+  mermas: typeof mermas;
   productos: typeof productos;
   usuarios: typeof usuarios;
   ventas: typeof ventas;

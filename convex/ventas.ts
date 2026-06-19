@@ -1,5 +1,30 @@
+// convex/ventas.ts
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+
+export const listar = query({
+  args: {
+    desde: v.optional(v.string()),
+    hasta: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    let ventas = await ctx.db
+      .query("ventas")
+      .order("desc")
+      .collect();
+
+    if (args.desde && args.hasta) {
+      ventas = ventas.filter((v) => {
+        const fecha = new Date(v._creationTime)
+          .toISOString().split("T")[0];
+        return fecha >= args.desde! && fecha <= args.hasta!;
+      });
+    }
+
+    return ventas;
+  },
+});
+
 export const crear = mutation({
   args: {
     usuario_id:     v.optional(v.string()),
@@ -24,10 +49,11 @@ export const crear = mutation({
     });
 
     for (const item of items) {
-      const producto = await ctx.db.get(item.producto_id as any);
-      const costo = producto?.costo || 0;
+      const producto = await ctx.db.get(
+        item.producto_id as any);
+      const costo       = producto?.costo || 0;
       const costo_total = costo * item.cantidad;
-      const margen_total = item.subtotal - costo_total;
+      const margen      = item.subtotal - costo_total;
 
       await ctx.db.insert("detalle_ventas", {
         venta_id:        venta_id,
@@ -38,7 +64,7 @@ export const crear = mutation({
         costo_unitario:  costo,
         subtotal:        item.subtotal,
         costo_total:     costo_total,
-        margen_total:    margen_total,
+        margen_total:    margen,
       });
 
       if (producto) {
@@ -49,5 +75,36 @@ export const crear = mutation({
     }
 
     return venta_id;
+  },
+});
+
+export const resumen_dia = query({
+  args: {},
+  handler: async (ctx) => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const ventas = await ctx.db
+      .query("ventas")
+      .filter((q) =>
+        q.gte(q.field("_creationTime"), hoy.getTime())
+      )
+      .collect();
+
+    const total    = ventas.reduce(
+      (s, v) => s + v.total, 0);
+    const efectivo = ventas
+      .filter((v) => v.metodo_pago === "efectivo")
+      .reduce((s, v) => s + v.total, 0);
+    const tarjeta  = ventas
+      .filter((v) => v.metodo_pago === "tarjeta")
+      .reduce((s, v) => s + v.total, 0);
+
+    return {
+      total_ventas: ventas.length,
+      total,
+      efectivo,
+      tarjeta,
+    };
   },
 });

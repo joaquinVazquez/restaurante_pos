@@ -2,14 +2,14 @@
 import flet as ft
 from database.db_manager import get_resumen_dia
 
-COLOR_TEXTO      = "#2c3e50"
-COLOR_SUBTEXTO   = "#7f8c8d"
-COLOR_TARJETA    = "#ffffff"
-COLOR_ACENTO     = "#00b894"
-COLOR_NARANJA    = "#ff7a00"
-COLOR_AZUL       = "#3498db"
-COLOR_ROJO       = "#e74c3c"
-COLOR_FONDO      = "#f0f4f8"
+COLOR_TEXTO    = "#2c3e50"
+COLOR_SUBTEXTO = "#7f8c8d"
+COLOR_TARJETA  = "#ffffff"
+COLOR_ACENTO   = "#00b894"
+COLOR_NARANJA  = "#ff7a00"
+COLOR_AZUL     = "#3498db"
+COLOR_ROJO     = "#e74c3c"
+COLOR_FONDO    = "#f0f4f8"
 
 
 def inicio_view(page: ft.Page, on_cambiar=None):
@@ -41,7 +41,8 @@ def inicio_view(page: ft.Page, on_cambiar=None):
             border_radius=14,
             padding=20,
             expand=True,
-            on_click=lambda e, m=modulo: navegar(m) if m else None,
+            on_click=lambda e, m=modulo:
+                navegar(m) if m else None,
             shadow=ft.BoxShadow(
                 blur_radius=8,
                 color="#00000015",

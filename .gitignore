@@ -29,3 +29,5 @@ build/
 # PyInstaller
 *.manifest
 .env.local
+
+node_modules

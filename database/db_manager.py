@@ -14,8 +14,8 @@ def verificar_conexion():
 
 
 def usando_convex() -> bool:
-    return _usar_convex["valor"]
-
+    """Para lecturas siempre usar SQLite (más rápido)."""
+    return False
 
 def _normalizar_producto(p: dict) -> dict:
     """Normaliza campos de Convex para que sean iguales a SQLite."""
@@ -450,3 +450,204 @@ def eliminar_categoria(categoria_id):
             "UPDATE categorias SET activo=0 WHERE id=?",
             [categoria_id], fetch=False
         )
+    # ── Reportes financieros ───────────────────────────────────
+def get_reporte_ventas(desde: str, hasta: str) -> dict:
+    if usando_convex():
+        ventas = convex_query("ventas:listar",
+                              {"desde": desde, "hasta": hasta}) or []
+        total    = sum(v.get("total", 0) for v in ventas)
+        efectivo = sum(v.get("total", 0) for v in ventas
+                       if v.get("metodo_pago") == "efectivo")
+        tarjeta  = sum(v.get("total", 0) for v in ventas
+                       if v.get("metodo_pago") == "tarjeta")
+        return {
+            "ingresos":        total,
+            "cantidad_ventas": len(ventas),
+            "efectivo":        efectivo,
+            "tarjeta":         tarjeta,
+        }
+    else:
+        r = sqlite_query("""
+            SELECT
+                COUNT(*) AS cantidad_ventas,
+                COALESCE(SUM(total), 0) AS ingresos,
+                COALESCE(SUM(CASE WHEN metodo_pago='efectivo'
+                    THEN total ELSE 0 END), 0) AS efectivo,
+                COALESCE(SUM(CASE WHEN metodo_pago='tarjeta'
+                    THEN total ELSE 0 END), 0) AS tarjeta
+            FROM ventas
+            WHERE DATE(creado_en) BETWEEN DATE(?) AND DATE(?)
+        """, [desde, hasta])
+        return r[0] if r else {
+            "ingresos": 0, "cantidad_ventas": 0,
+            "efectivo": 0, "tarjeta": 0
+        }
+
+
+def get_reporte_margen(desde: str, hasta: str) -> dict:
+    if usando_convex():
+        # Para Convex calculamos en Python con los datos crudos
+        ventas = convex_query("ventas:listar",
+                              {"desde": desde, "hasta": hasta}) or []
+        ingresos = sum(v.get("total", 0) for v in ventas)
+        # El detalle se calcula sumando margen_total guardado
+        costo_productos = 0  # Se puede mejorar con query a detalle_ventas
+        gastos = sum(g.get("monto", 0) for g in
+                     (convex_query("gastos:listar",
+                      {"desde": desde, "hasta": hasta}) or []))
+        merma = sum(m.get("costo_total", 0) for m in
+                    (convex_query("mermas:listar",
+                     {"desde": desde, "hasta": hasta}) or []))
+        ganancia_neta = ingresos - costo_productos - gastos - merma
+        margen_pct = (ganancia_neta / ingresos * 100) if ingresos else 0
+        return {
+            "ingresos": ingresos,
+            "costo_productos": costo_productos,
+            "gastos": gastos,
+            "merma": merma,
+            "ganancia_neta": ganancia_neta,
+            "margen_pct": margen_pct,
+        }
+    else:
+        r = sqlite_query("""
+            SELECT
+                COALESCE(SUM(dv.subtotal), 0) AS ingresos,
+                COALESCE(SUM(dv.cantidad * COALESCE(dv.costo_unitario, p.costo, 0)), 0) AS costo_productos
+            FROM detalle_ventas dv
+            JOIN ventas v ON v.id = dv.venta_id
+            JOIN productos p ON p.id = dv.producto_id
+            WHERE DATE(v.creado_en) BETWEEN DATE(?) AND DATE(?)
+        """, [desde, hasta])
+
+        base = r[0] if r else {"ingresos": 0, "costo_productos": 0}
+        ingresos = base["ingresos"]
+        costo_productos = base["costo_productos"]
+
+        g = sqlite_query("""
+            SELECT COALESCE(SUM(monto), 0) AS gastos
+            FROM gastos WHERE DATE(fecha) BETWEEN DATE(?) AND DATE(?)
+        """, [desde, hasta])
+        gastos = g[0]["gastos"] if g else 0
+
+        m = sqlite_query("""
+            SELECT COALESCE(SUM(costo_total), 0) AS merma
+            FROM mermas WHERE DATE(fecha) BETWEEN DATE(?) AND DATE(?)
+        """, [desde, hasta])
+        merma = m[0]["merma"] if m else 0
+
+        ganancia_neta = ingresos - costo_productos - gastos - merma
+        margen_pct = (ganancia_neta / ingresos * 100) if ingresos else 0
+
+        return {
+            "ingresos":         ingresos,
+            "costo_productos":  costo_productos,
+            "gastos":           gastos,
+            "merma":            merma,
+            "ganancia_neta":    ganancia_neta,
+            "margen_pct":       margen_pct,
+        }
+
+
+# ── Gastos ─────────────────────────────────────────────────
+def get_gastos(desde: str, hasta: str):
+    if usando_convex():
+        return convex_query("gastos:listar",
+                            {"desde": desde, "hasta": hasta}) or []
+    else:
+        return sqlite_query("""
+            SELECT * FROM gastos
+            WHERE DATE(fecha) BETWEEN DATE(?) AND DATE(?)
+            ORDER BY fecha DESC
+        """, [desde, hasta]) or []
+
+
+def crear_gasto(datos: dict):
+    if usando_convex():
+        return convex_mutation("gastos:crear", datos)
+    else:
+        return sqlite_query("""
+            INSERT INTO gastos (categoria, descripcion, monto, fecha)
+            VALUES (?, ?, ?, ?)
+        """, [
+            datos["categoria"], datos["descripcion"],
+            datos["monto"], datos["fecha"]
+        ], fetch=False)
+
+
+# ── Mermas ─────────────────────────────────────────────────
+def get_mermas(desde: str, hasta: str):
+    if usando_convex():
+        return convex_query("mermas:listar",
+                            {"desde": desde, "hasta": hasta}) or []
+    else:
+        return sqlite_query("""
+            SELECT * FROM mermas
+            WHERE DATE(fecha) BETWEEN DATE(?) AND DATE(?)
+            ORDER BY fecha DESC
+        """, [desde, hasta]) or []
+
+
+def crear_merma(datos: dict):
+    if usando_convex():
+        return convex_mutation("mermas:crear", datos)
+    else:
+        prod = sqlite_query(
+            "SELECT nombre, costo FROM productos WHERE id=?",
+            [datos["producto_id"]]
+        )
+        nombre = prod[0]["nombre"] if prod else "Desconocido"
+        costo  = prod[0]["costo"] if prod else 0
+        costo_total = costo * datos["cantidad"]
+
+        sqlite_query("""
+            UPDATE productos SET stock = stock - ? WHERE id=?
+        """, [datos["cantidad"], datos["producto_id"]],
+            fetch=False)
+
+        return sqlite_query("""
+            INSERT INTO mermas
+                (producto_id, producto_nombre, cantidad,
+                 costo_unitario, costo_total, motivo, fecha)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, [
+            datos["producto_id"], nombre, datos["cantidad"],
+            costo, costo_total, datos["motivo"], datos["fecha"]
+        ], fetch=False)
+
+
+# ── Comparativas ───────────────────────────────────────────
+def get_comparativa(periodo: str):
+    if periodo == "semanal":
+        query = """
+            SELECT strftime('%w', creado_en) AS grupo,
+                   COALESCE(SUM(total), 0) AS total
+            FROM ventas
+            WHERE creado_en >= DATE('now', '-7 days')
+            GROUP BY grupo ORDER BY grupo
+        """
+    elif periodo == "mensual":
+        query = """
+            SELECT strftime('%d', creado_en) AS grupo,
+                   COALESCE(SUM(total), 0) AS total
+            FROM ventas
+            WHERE creado_en >= DATE('now', 'start of month')
+            GROUP BY grupo ORDER BY grupo
+        """
+    else:  # anual
+        query = """
+            SELECT strftime('%m', creado_en) AS grupo,
+                   COALESCE(SUM(total), 0) AS total
+            FROM ventas
+            WHERE creado_en >= DATE('now', 'start of year')
+            GROUP BY grupo ORDER BY grupo
+        """
+    return sqlite_query(query) or []
+
+
+# ── Cortes de caja (para reportes) ─────────────────────────
+def get_cortes_caja(desde: str, hasta: str):
+    return sqlite_query("""
+        SELECT * FROM cortes_caja
+        WHERE DATE(fecha) BETWEEN DATE(?) AND DATE(?)
+        ORDER BY fecha DESC
+    """, [desde, hasta]) or []

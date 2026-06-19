@@ -1,6 +1,7 @@
 # main.py
 import flet as ft
 from database.init_db import inicializar_bd
+from database.db_manager import verificar_conexion
 from controllers.auth_controller import (
     cerrar_sesion, get_modulos_permitidos
 )
@@ -19,12 +20,22 @@ BREAKPOINT_MOVIL = 800
 BOTTOM_NAV_H     = 72
 
 inicializar_bd()
-from database.db_manager import verificar_conexion
 verificar_conexion()
+
+NAV_ITEMS = {
+    "inicio":    ("🏠", "Inicio"),
+    "ventas":    ("💰", "Ventas"),
+    "productos": ("📦", "Productos"),
+    "reportes":  ("📊", "Reportes"),
+    "caja":      ("🏧", "Caja"),
+    "clientes":  ("👥", "Clientes"),
+    "config":    ("⚙️", "Config"),
+}
 
 
 def es_movil(page: ft.Page) -> bool:
-    return page.width is not None and page.width <= BREAKPOINT_MOVIL
+    return page.width is not None \
+        and page.width <= BREAKPOINT_MOVIL
 
 
 def main(page: ft.Page):
@@ -43,12 +54,36 @@ def main(page: ft.Page):
         expand=True
     )
 
+    def hacer_nav_item(modulo, modulo_activo, on_cambiar):
+        icono, label = NAV_ITEMS.get(modulo, ("●", modulo))
+        activo = modulo == modulo_activo
+        return ft.Container(
+            expand=True,
+            height=64,
+            on_click=lambda e, m=modulo: on_cambiar(m),
+            content=ft.Column(
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=2,
+                controls=[
+                    ft.Text(icono, size=20,
+                            color="#00b894" if activo
+                            else "#a0aec0"),
+                    ft.Text(label, size=10,
+                            color="white" if activo
+                            else "#a0aec0",
+                            weight=ft.FontWeight.BOLD if activo
+                            else ft.FontWeight.NORMAL),
+                ],
+            ),
+        )
+
     def mostrar_login():
         estado["usuario"] = None
         page.controls.clear()
-        page.add(
-            login_view(page, on_login_exitoso=mostrar_app)
-        )
+        page.bgcolor = COLOR_FONDO
+        page.add(login_view(page,
+                            on_login_exitoso=mostrar_app))
         page.update()
 
     def mostrar_app(usuario):
@@ -68,6 +103,23 @@ def main(page: ft.Page):
             modulo = modulos[0] if modulos else "inicio"
 
         estado["modulo"] = modulo
+        area_contenido.padding = 12 if es_movil(page) else 24
+
+        # Loader
+        area_contenido.content = ft.Container(
+            expand=True,
+            content=ft.Column(
+                controls=[
+                    ft.ProgressRing(color="#00b894"),
+                    ft.Text("Cargando...",
+                            color="#7f8c8d", size=13)
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.CENTER,
+                expand=True
+            )
+        )
+        page.update()
 
         if modulo == "inicio":
             contenido = inicio_view(
@@ -84,7 +136,8 @@ def main(page: ft.Page):
             contenido = clientes_view(page)
         elif modulo == "config":
             from views.config_view import config_view
-            contenido = config_view(page, usuario_actual=usuario)
+            contenido = config_view(
+                page, usuario_actual=usuario)
         else:
             contenido = ft.Column(
                 controls=[
@@ -109,28 +162,22 @@ def main(page: ft.Page):
         page.controls.clear()
 
         if es_movil(page):
-            # ── Móvil: Stack con bottom nav fijo ──────────
-           layout = ft.Stack(
+            layout = ft.Stack(
                 width=page.width,
                 height=page.height,
                 controls=[
-                    # Contenido con padding inferior
                     ft.Container(
                         expand=True,
                         padding=ft.padding.only(
-                            left=12,
-                            right=12,
+                            left=12, right=12,
                             top=12,
                             bottom=BOTTOM_NAV_H + 12
                         ),
                         clip_behavior=ft.ClipBehavior.HARD_EDGE,
                         content=area_contenido,
                     ),
-                    # Bottom nav pegado al fondo
                     ft.Container(
-                        left=0,
-                        right=0,
-                        bottom=0,
+                        left=0, right=0, bottom=0,
                         height=BOTTOM_NAV_H,
                         content=bottom_nav(
                             page=page,
@@ -142,7 +189,6 @@ def main(page: ft.Page):
                 ]
             )
         else:
-            # ── Desktop: sidebar + contenido ──────────────
             layout = ft.Row(
                 expand=True,
                 spacing=0,

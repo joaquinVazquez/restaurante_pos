@@ -1,5 +1,5 @@
 # controllers/auth_controller.py
-from database.connection import execute_query
+from database.db_manager import login_usuario
 
 # Sesión en memoria
 _sesion_activa = {"usuario": None}
@@ -9,18 +9,8 @@ def login(username: str, password: str):
     if not username or not password:
         return None
 
-    resultado = execute_query("""
-        SELECT id, nombre, username, password_hash, rol, activo
-        FROM usuarios
-        WHERE username = ? AND activo = 1
-    """, [username.strip()])
-
-    if not resultado:
-        return None
-
-    usuario = resultado[0]
-
-    if usuario["password_hash"] == password:
+    usuario = login_usuario(username.strip(), password)
+    if usuario:
         _sesion_activa["usuario"] = {
             "id":       usuario["id"],
             "nombre":   usuario["nombre"],

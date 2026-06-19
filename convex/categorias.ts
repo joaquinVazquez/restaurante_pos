@@ -25,3 +25,22 @@ export const crear = mutation({
     });
   },
 });
+
+export const actualizar = mutation({
+  args: {
+    id: v.id("categorias"),
+    nombre: v.optional(v.string()),
+    icono: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { id, ...campos } = args;
+    return await ctx.db.patch(id, campos);
+  },
+});
+
+export const eliminar = mutation({
+  args: { id: v.id("categorias") },
+  handler: async (ctx, args) => {
+    return await ctx.db.patch(args.id, { activo: false });
+  },
+});

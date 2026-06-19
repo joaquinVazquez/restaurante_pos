@@ -1,653 +1,397 @@
-# database/db_manager.py
-from database.convex_client import convex_query, convex_mutation
-from database.connection import execute_query as sqlite_query, get_connection
+from datetime import date, datetime
 
-_usar_convex = {"valor": False}
+from database.convex_client import convex_mutation, convex_query
+
+
+def _required_query(path: str, args: dict | None = None):
+    result = convex_query(path, args)
+    if result is None:
+        raise ConnectionError(f"No se pudo consultar Convex: {path}")
+    return result
+
+
+def _required_mutation(path: str, args: dict | None = None):
+    result = convex_mutation(path, args)
+    if result is None:
+        raise ConnectionError(f"No se pudo ejecutar Convex: {path}")
+    return result
+
+
+def _creation_date(item: dict) -> str:
+    created = item.get("_creationTime")
+    if created is None:
+        return item.get("fecha") or date.today().isoformat()
+    return datetime.fromtimestamp(created / 1000).date().isoformat()
 
 
 def verificar_conexion():
-    resultado = convex_query("usuarios:listar")
-    _usar_convex["valor"] = resultado is not None
-    modo = "☁️  Convex" if _usar_convex["valor"] else "💾 SQLite"
-    print(f"🔌 Modo: {modo}")
-    return _usar_convex["valor"]
+    _required_query("usuarios:listar")
+    print("Modo: Convex")
+    return True
 
 
 def usando_convex() -> bool:
-    """Para lecturas siempre usar SQLite (más rápido)."""
-    return False
+    return True
 
-def _normalizar_producto(p: dict) -> dict:
-    """Normaliza campos de Convex para que sean iguales a SQLite."""
+
+def login_usuario(username: str, password: str):
+    return _required_query("usuarios:login", {
+        "username": username,
+        "password": password,
+    })
+
+
+def _normalizar_categoria(c: dict) -> dict:
     return {
-        "id":          p.get("_id") or p.get("id"),
-        "nombre":      p.get("nombre", ""),
-        "descripcion": p.get("descripcion", ""),
-        "precio":      float(p.get("precio", 0)),
-        "stock":       int(p.get("stock", 0)),
-        "categoria":   p.get("categoria", ""),
-        "icono":       p.get("icono", "🍽️"),
-        "activo":      p.get("activo", True),
-        "imagen":      p.get("imagen"),
+        "id": c.get("_id") or c.get("id"),
+        "nombre": c.get("nombre", ""),
+        "icono": c.get("icono", ""),
+        "activo": c.get("activo", True),
     }
 
 
-# ── Resumen Dashboard ──────────────────────────────────────
+def _normalizar_producto(p: dict) -> dict:
+    return {
+        "id": p.get("_id") or p.get("id"),
+        "nombre": p.get("nombre", ""),
+        "descripcion": p.get("descripcion", ""),
+        "precio": float(p.get("precio", 0)),
+        "costo": float(p.get("costo", 0) or 0),
+        "stock": int(p.get("stock", 0)),
+        "categoria_id": p.get("categoria_id"),
+        "categoria": p.get("categoria", ""),
+        "icono": p.get("icono", ""),
+        "activo": p.get("activo", True),
+        "imagen": p.get("imagen"),
+    }
+
+
+def _normalizar_venta(v: dict) -> dict:
+    return {
+        "id": v.get("_id") or v.get("id"),
+        "total": float(v.get("total", 0)),
+        "metodo_pago": v.get("metodo_pago", ""),
+        "creado_en": _creation_date(v),
+        "productos": v.get("productos", 0),
+        "cliente_id": v.get("cliente_id"),
+    }
+
+
 def get_resumen_dia() -> dict:
-    if usando_convex():
-        r = convex_query("ventas:resumen_dia") or {}
-        # Agregar productos y stock desde SQLite como complemento
-        prod = sqlite_query(
-            "SELECT COUNT(*) AS total FROM productos WHERE activo=1"
-        )
-        stock = sqlite_query(
-            "SELECT COUNT(*) AS total FROM productos WHERE stock<=5 AND activo=1"
-        )
-        return {
-            "total_ventas":      r.get("total_ventas", 0),
-            "total":             r.get("total", 0),
-            "efectivo":          r.get("efectivo", 0),
-            "tarjeta":           r.get("tarjeta", 0),
-            "productos_activos": prod[0]["total"] if prod else 0,
-            "stock_bajo":        stock[0]["total"] if stock else 0,
-        }
-    else:
-        r = sqlite_query("""
-            SELECT
-                COUNT(*) AS total_ventas,
-                COALESCE(SUM(total), 0) AS total,
-                COALESCE(SUM(CASE WHEN metodo_pago='efectivo'
-                    THEN total ELSE 0 END), 0) AS efectivo,
-                COALESCE(SUM(CASE WHEN metodo_pago='tarjeta'
-                    THEN total ELSE 0 END), 0) AS tarjeta
-            FROM ventas
-            WHERE DATE(creado_en) = DATE('now')
-        """)
-        prod = sqlite_query(
-            "SELECT COUNT(*) AS total FROM productos WHERE activo=1"
-        )
-        stock = sqlite_query(
-            "SELECT COUNT(*) AS total FROM productos WHERE stock<=5 AND activo=1"
-        )
-        base = r[0] if r else {}
-        return {
-            "total_ventas":      base.get("total_ventas", 0),
-            "total":             base.get("total", 0),
-            "efectivo":          base.get("efectivo", 0),
-            "tarjeta":           base.get("tarjeta", 0),
-            "productos_activos": prod[0]["total"] if prod else 0,
-            "stock_bajo":        stock[0]["total"] if stock else 0,
-        }
+    resumen = _required_query("ventas:resumen_dia") or {}
+    productos = get_productos(include_sin_stock=True)
+    return {
+        "total_ventas": resumen.get("total_ventas", 0),
+        "total": resumen.get("total", 0),
+        "efectivo": resumen.get("efectivo", 0),
+        "tarjeta": resumen.get("tarjeta", 0),
+        "productos_activos": len([p for p in productos if p.get("activo", True)]),
+        "stock_bajo": len([
+            p for p in productos
+            if p.get("activo", True) and int(p.get("stock", 0)) <= 5
+        ]),
+    }
 
 
-# ── Categorías ─────────────────────────────────────────────
 def get_categorias():
-    if usando_convex():
-        cats = convex_query("categorias:listar") or []
-        return [{"id": c.get("_id"), "nombre": c.get("nombre"),
-                 "icono": c.get("icono", "🍽️")} for c in cats]
-    else:
-        return sqlite_query("""
-            SELECT id, nombre, icono FROM categorias
-            WHERE activo=1 ORDER BY nombre
-        """) or []
+    return [_normalizar_categoria(c)
+            for c in (_required_query("categorias:listar") or [])]
 
 
-# ── Productos ──────────────────────────────────────────────
-def get_productos(busqueda=None, categoria_id=None):
-    if usando_convex():
-        args = {}
-        if busqueda:      args["busqueda"]     = busqueda
-        if categoria_id:  args["categoria_id"] = categoria_id
-        prods = convex_query("productos:listar", args) or []
-        return [_normalizar_producto(p) for p in prods
-                if p.get("stock", 0) > 0]
-    else:
-        query = """
-            SELECT p.id, p.nombre, p.descripcion, p.precio,
-                   p.stock, c.nombre AS categoria,
-                   c.icono, p.activo, p.imagen
-            FROM productos p
-            LEFT JOIN categorias c ON p.categoria_id = c.id
-            WHERE p.activo=1 AND p.stock > 0
-        """
-        params = []
-        if categoria_id:
-            query += " AND p.categoria_id = ?"
-            params.append(categoria_id)
-        if busqueda:
-            query += " AND LOWER(p.nombre) LIKE LOWER(?)"
-            params.append(f"%{busqueda}%")
-        query += " ORDER BY p.nombre"
-        return sqlite_query(query, params if params else None) or []
+def get_productos(busqueda=None, categoria_id=None, include_sin_stock=False):
+    args = {}
+    if busqueda:
+        args["busqueda"] = busqueda
+    if categoria_id:
+        args["categoria_id"] = categoria_id
+
+    categorias = {c["id"]: c for c in get_categorias()}
+    productos = []
+    for p in _required_query("productos:listar", args) or []:
+        producto = _normalizar_producto(p)
+        cat = categorias.get(producto["categoria_id"], {})
+        producto["categoria"] = cat.get("nombre", "")
+        producto["icono"] = cat.get("icono", producto.get("icono", ""))
+        if include_sin_stock or producto["stock"] > 0:
+            productos.append(producto)
+    return productos
 
 
 def crear_producto(datos: dict):
-    if usando_convex():
-        return convex_mutation("productos:crear", datos)
-    else:
-        return sqlite_query("""
-            INSERT INTO productos
-                (nombre, descripcion, precio, stock,
-                 categoria_id, imagen)
-            VALUES (?,?,?,?,?,?)
-        """, [
-            datos.get("nombre"),
-            datos.get("descripcion"),
-            datos.get("precio"),
-            datos.get("stock"),
-            datos.get("categoria_id"),
-            datos.get("imagen"),
-        ], fetch=False)
+    return _required_mutation("productos:crear", {
+        "nombre": datos.get("nombre"),
+        "descripcion": datos.get("descripcion") or "",
+        "precio": float(datos.get("precio", 0)),
+        "stock": int(datos.get("stock", 0)),
+        "categoria_id": datos.get("categoria_id") or None,
+        "imagen": datos.get("imagen") or None,
+    })
 
 
 def actualizar_producto(producto_id, datos: dict):
-    if usando_convex():
-        return convex_mutation("productos:actualizar", {
-            "id": producto_id, **datos
-        })
-    else:
-        return sqlite_query("""
-            UPDATE productos
-            SET nombre=?, precio=?, stock=?, categoria_id=?
-            WHERE id=?
-        """, [
-            datos.get("nombre"),
-            datos.get("precio"),
-            datos.get("stock"),
-            datos.get("categoria_id"),
-            producto_id,
-        ], fetch=False)
+    payload = {"id": producto_id}
+    for key in ("nombre", "descripcion", "categoria_id", "imagen"):
+        if key in datos:
+            payload[key] = datos.get(key) or None
+    if "precio" in datos:
+        payload["precio"] = float(datos["precio"])
+    if "stock" in datos:
+        payload["stock"] = int(datos["stock"])
+    return _required_mutation("productos:actualizar", payload)
 
 
 def desactivar_producto(producto_id):
-    if usando_convex():
-        return convex_mutation("productos:desactivar",
-                               {"id": producto_id})
-    else:
-        return sqlite_query(
-            "UPDATE productos SET activo=0 WHERE id=?",
-            [producto_id], fetch=False
-        )
+    return _required_mutation("productos:desactivar", {"id": producto_id})
 
 
 def actualizar_stock(producto_id, cantidad):
-    if usando_convex():
-        return convex_mutation("productos:actualizar_stock", {
-            "id": producto_id, "cantidad": cantidad
-        })
-    else:
-        return sqlite_query("""
-            UPDATE productos SET stock = stock - ?
-            WHERE id = ?
-        """, [cantidad, producto_id], fetch=False)
+    return _required_mutation("productos:actualizar_stock", {
+        "id": producto_id,
+        "cantidad": float(cantidad),
+    })
 
 
-# ── Ventas ─────────────────────────────────────────────────
 def crear_venta(datos: dict, items: list):
-    if usando_convex():
-        return convex_mutation("ventas:crear", {
-            **datos, "items": items
-        })
-    else:
-        conn = get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO ventas
-                    (usuario_id, total, metodo_pago,
-                     monto_recibido, cambio, estado)
-                VALUES (1, ?, ?, ?, ?, 'completada')
-            """, [
-                datos["total"],
-                datos["metodo_pago"],
-                datos.get("monto_recibido"),
-                datos.get("cambio"),
-            ])
-            venta_id = cursor.lastrowid
-
-            for item in items:
-                cursor.execute("""
-                    INSERT INTO detalle_ventas
-                        (venta_id, producto_id, cantidad,
-                         precio_unitario, subtotal)
-                    VALUES (?,?,?,?,?)
-                """, [
-                    venta_id,
-                    item["producto_id"],
-                    item["cantidad"],
-                    item["precio_unitario"],
-                    item["subtotal"],
-                ])
-                cursor.execute("""
-                    UPDATE productos SET stock = stock - ?
-                    WHERE id = ?
-                """, [item["cantidad"], item["producto_id"]])
-
-            conn.commit()
-            return venta_id
-        except Exception as ex:
-            conn.rollback()
-            raise ex
-        finally:
-            conn.close()
+    return _required_mutation("ventas:crear", {**datos, "items": items})
 
 
 def get_ventas(desde=None, hasta=None):
-    if usando_convex():
-        args = {}
-        if desde: args["desde"] = str(desde)
-        if hasta: args["hasta"] = str(hasta)
-        return convex_query("ventas:listar", args) or []
-    else:
-        query = """
-            SELECT v.id, v.total, v.metodo_pago,
-                   v.creado_en, COUNT(dv.id) AS productos
-            FROM ventas v
-            LEFT JOIN detalle_ventas dv ON v.id = dv.venta_id
-        """
-        params = []
-        if desde and hasta:
-            query += " WHERE DATE(v.creado_en) BETWEEN ? AND ?"
-            params = [desde, hasta]
-        query += " GROUP BY v.id ORDER BY v.creado_en DESC"
-        return sqlite_query(query, params if params else None) or []
+    args = {}
+    if desde:
+        args["desde"] = str(desde)
+    if hasta:
+        args["hasta"] = str(hasta)
+    return [_normalizar_venta(v) for v in (_required_query("ventas:listar", args) or [])]
 
 
-# ── Clientes ───────────────────────────────────────────────
 def get_clientes(busqueda=""):
-    if usando_convex():
-        return convex_query("clientes:listar",
-                            {"busqueda": busqueda}) or []
-    else:
-        return sqlite_query("""
-            SELECT c.id, c.nombre, c.telefono, c.email,
-                   c.activo,
-                   COUNT(v.id) AS total_compras,
-                   COALESCE(SUM(v.total), 0) AS total_gastado
-            FROM clientes c
-            LEFT JOIN ventas v ON v.cliente_id = c.id
-            WHERE c.activo=1
-            AND (LOWER(c.nombre) LIKE LOWER(?)
-                OR LOWER(COALESCE(c.telefono,'')) LIKE LOWER(?))
-            GROUP BY c.id ORDER BY c.nombre
-        """, [f"%{busqueda}%", f"%{busqueda}%"]) or []
-        # ── Configuración ──────────────────────────────────────────
+    clientes = _required_query("clientes:listar", {"busqueda": busqueda or ""}) or []
+    ventas = get_ventas()
+    salida = []
+    for c in clientes:
+        cid = c.get("_id")
+        compras = [v for v in ventas if v.get("cliente_id") == cid]
+        salida.append({
+            "id": cid,
+            "nombre": c.get("nombre", ""),
+            "telefono": c.get("telefono"),
+            "email": c.get("email"),
+            "direccion": c.get("direccion"),
+            "notas": c.get("notas"),
+            "activo": c.get("activo", True),
+            "total_compras": len(compras),
+            "total_gastado": sum(v.get("total", 0) for v in compras),
+        })
+    return salida
+
+
+def crear_cliente(datos: dict):
+    return _required_mutation("clientes:crear", datos)
+
+
+def actualizar_cliente(cliente_id, datos: dict):
+    return _required_mutation("clientes:actualizar", {"id": cliente_id, **datos})
+
+
+def desactivar_cliente(cliente_id):
+    return _required_mutation("clientes:desactivar", {"id": cliente_id})
+
+
+def get_historial_cliente(cliente_id):
+    return _required_query("clientes:historial", {"cliente_id": cliente_id}) or []
+
+
 def get_configuracion() -> dict:
-    if usando_convex():
-        items = convex_query("configuracion:listar") or []
-        return {i["clave"]: i["valor"] for i in items}
-    else:
-        items = sqlite_query(
-            "SELECT clave, valor FROM configuracion"
-        ) or []
-        return {i["clave"]: i["valor"] for i in items}
+    items = _required_query("configuracion:listar") or []
+    return {i["clave"]: i.get("valor", "") for i in items}
 
 
 def guardar_configuracion(datos: dict):
     claves = {
-        "nombre":    "restaurante_nombre",
+        "nombre": "restaurante_nombre",
         "direccion": "restaurante_direccion",
-        "telefono":  "restaurante_telefono",
-        "email":     "restaurante_email",
-        "rfc":       "restaurante_rfc",
-        "logo":      "restaurante_logo",
+        "telefono": "restaurante_telefono",
+        "email": "restaurante_email",
+        "rfc": "restaurante_rfc",
+        "logo": "restaurante_logo",
     }
     for campo, clave in claves.items():
-        valor = datos.get(campo, "")
-        if usando_convex():
-            convex_mutation("configuracion:guardar", {
-                "clave": clave, "valor": valor
+        if campo in datos:
+            _required_mutation("configuracion:guardar", {
+                "clave": clave,
+                "valor": datos.get(campo, ""),
             })
-        else:
-            sqlite_query("""
-                INSERT INTO configuracion (clave, valor)
-                VALUES (?, ?)
-                ON CONFLICT(clave) DO UPDATE SET valor=?
-            """, [clave, valor, valor], fetch=False)
 
 
 def get_config_impresora() -> dict:
     config = get_configuracion()
     return {
         "nombre_impresora": config.get("impresora_nombre", ""),
-        "ancho_papel":      config.get("impresora_ancho", "80"),
-        "mensaje_ticket":   config.get("ticket_mensaje",
-                                       "¡Gracias por su compra!"),
+        "ancho_papel": config.get("impresora_ancho", "80"),
+        "mensaje_ticket": config.get("ticket_mensaje", "Gracias por su compra!"),
     }
 
 
 def guardar_config_impresora(datos: dict):
     claves = {
         "nombre_impresora": "impresora_nombre",
-        "ancho_papel":      "impresora_ancho",
-        "mensaje_ticket":   "ticket_mensaje",
+        "ancho_papel": "impresora_ancho",
+        "mensaje_ticket": "ticket_mensaje",
     }
     for campo, clave in claves.items():
-        valor = datos.get(campo, "")
-        if usando_convex():
-            convex_mutation("configuracion:guardar", {
-                "clave": clave, "valor": valor
-            })
-        else:
-            sqlite_query("""
-                INSERT INTO configuracion (clave, valor)
-                VALUES (?, ?)
-                ON CONFLICT(clave) DO UPDATE SET valor=?
-            """, [clave, valor, valor], fetch=False)
+        _required_mutation("configuracion:guardar", {
+            "clave": clave,
+            "valor": datos.get(campo, ""),
+        })
 
 
-# ── Usuarios ───────────────────────────────────────────────
 def get_usuarios():
-    if usando_convex():
-        users = convex_query("usuarios:listar") or []
-        return [{
-            "id":     u.get("_id"),
-            "nombre": u.get("nombre"),
-            "username": u.get("username"),
-            "rol":    u.get("rol"),
-            "activo": u.get("activo", True),
-        } for u in users]
-    else:
-        return sqlite_query("""
-            SELECT id, nombre, username, rol, activo
-            FROM usuarios ORDER BY nombre
-        """) or []
+    return [{
+        "id": u.get("_id"),
+        "nombre": u.get("nombre"),
+        "username": u.get("username"),
+        "rol": u.get("rol"),
+        "activo": u.get("activo", True),
+    } for u in (_required_query("usuarios:listar") or [])]
 
 
 def crear_usuario(datos: dict):
-    if usando_convex():
-        return convex_mutation("usuarios:crear", {
-            "nombre":        datos["nombre"],
-            "username":      datos["username"],
-            "password_hash": datos["password"],
-            "rol":           datos.get("rol", "cajero"),
-        })
-    else:
-        return sqlite_query("""
-            INSERT INTO usuarios
-                (nombre, username, password_hash, rol, activo)
-            VALUES (?, ?, ?, ?, 1)
-        """, [
-            datos["nombre"],
-            datos["username"],
-            datos["password"],
-            datos.get("rol", "cajero"),
-        ], fetch=False)
+    return _required_mutation("usuarios:crear", {
+        "nombre": datos["nombre"],
+        "username": datos["username"],
+        "password_hash": datos["password"],
+        "rol": datos.get("rol", "cajero"),
+    })
 
 
 def cambiar_password_usuario(usuario_id, password: str):
-    if usando_convex():
-        return convex_mutation("usuarios:cambiar_password", {
-            "id": usuario_id, "password_hash": password
-        })
-    else:
-        return sqlite_query("""
-            UPDATE usuarios SET password_hash=? WHERE id=?
-        """, [password, usuario_id], fetch=False)
+    return _required_mutation("usuarios:cambiar_password", {
+        "id": usuario_id,
+        "password_hash": password,
+    })
 
 
 def toggle_usuario_activo(usuario_id, activo: bool):
-    if usando_convex():
-        return convex_mutation("usuarios:toggle_activo", {
-            "id": usuario_id, "activo": activo
-        })
-    else:
-        return sqlite_query("""
-            UPDATE usuarios SET activo=? WHERE id=?
-        """, [1 if activo else 0, usuario_id], fetch=False)
+    return _required_mutation("usuarios:toggle_activo", {
+        "id": usuario_id,
+        "activo": activo,
+    })
 
 
-# ── Categorías CRUD ────────────────────────────────────────
 def crear_categoria(datos: dict):
-    if usando_convex():
-        return convex_mutation("categorias:crear", {
-            "nombre": datos["nombre"],
-            "icono":  datos.get("icono", "🍽️"),
-        })
-    else:
-        return sqlite_query("""
-            INSERT INTO categorias (nombre, icono, activo)
-            VALUES (?, ?, 1)
-        """, [datos["nombre"], datos.get("icono", "🍽️")],
-            fetch=False)
+    return _required_mutation("categorias:crear", {
+        "nombre": datos["nombre"],
+        "icono": datos.get("icono", ""),
+    })
 
 
 def actualizar_categoria(categoria_id, datos: dict):
-    if usando_convex():
-        return convex_mutation("categorias:actualizar", {
-            "id":     categoria_id,
-            "nombre": datos.get("nombre"),
-            "icono":  datos.get("icono"),
-        })
-    else:
-        return sqlite_query("""
-            UPDATE categorias SET nombre=?, icono=?
-            WHERE id=?
-        """, [datos.get("nombre"), datos.get("icono"),
-              categoria_id], fetch=False)
+    return _required_mutation("categorias:actualizar", {
+        "id": categoria_id,
+        "nombre": datos.get("nombre"),
+        "icono": datos.get("icono"),
+    })
 
 
 def eliminar_categoria(categoria_id):
-    # Verificar si tiene productos activos
-    if usando_convex():
-        prods = convex_query("productos:listar",
-                             {"categoria_id": categoria_id}) or []
-        if len(prods) > 0:
-            raise Exception(
-                "⚠️ No se puede eliminar: tiene productos activos")
-        return convex_mutation("categorias:eliminar",
-                               {"id": categoria_id})
-    else:
-        prods = sqlite_query("""
-            SELECT COUNT(*) AS total FROM productos
-            WHERE categoria_id=? AND activo=1
-        """, [categoria_id])
-        if prods and prods[0]["total"] > 0:
-            raise Exception(
-                "⚠️ No se puede eliminar: tiene productos activos")
-        return sqlite_query(
-            "UPDATE categorias SET activo=0 WHERE id=?",
-            [categoria_id], fetch=False
-        )
-    # ── Reportes financieros ───────────────────────────────────
+    prods = get_productos(categoria_id=categoria_id, include_sin_stock=True)
+    if prods:
+        raise Exception("No se puede eliminar: tiene productos activos")
+    return _required_mutation("categorias:eliminar", {"id": categoria_id})
+
+
 def get_reporte_ventas(desde: str, hasta: str) -> dict:
-    if usando_convex():
-        ventas = convex_query("ventas:listar",
-                              {"desde": desde, "hasta": hasta}) or []
-        total    = sum(v.get("total", 0) for v in ventas)
-        efectivo = sum(v.get("total", 0) for v in ventas
-                       if v.get("metodo_pago") == "efectivo")
-        tarjeta  = sum(v.get("total", 0) for v in ventas
-                       if v.get("metodo_pago") == "tarjeta")
-        return {
-            "ingresos":        total,
-            "cantidad_ventas": len(ventas),
-            "efectivo":        efectivo,
-            "tarjeta":         tarjeta,
-        }
-    else:
-        r = sqlite_query("""
-            SELECT
-                COUNT(*) AS cantidad_ventas,
-                COALESCE(SUM(total), 0) AS ingresos,
-                COALESCE(SUM(CASE WHEN metodo_pago='efectivo'
-                    THEN total ELSE 0 END), 0) AS efectivo,
-                COALESCE(SUM(CASE WHEN metodo_pago='tarjeta'
-                    THEN total ELSE 0 END), 0) AS tarjeta
-            FROM ventas
-            WHERE DATE(creado_en) BETWEEN DATE(?) AND DATE(?)
-        """, [desde, hasta])
-        return r[0] if r else {
-            "ingresos": 0, "cantidad_ventas": 0,
-            "efectivo": 0, "tarjeta": 0
-        }
+    ventas = get_ventas(desde, hasta)
+    total = sum(v.get("total", 0) for v in ventas)
+    efectivo = sum(v.get("total", 0) for v in ventas
+                   if v.get("metodo_pago") == "efectivo")
+    tarjeta = sum(v.get("total", 0) for v in ventas
+                  if v.get("metodo_pago") == "tarjeta")
+    return {
+        "ingresos": total,
+        "cantidad_ventas": len(ventas),
+        "efectivo": efectivo,
+        "tarjeta": tarjeta,
+    }
 
 
 def get_reporte_margen(desde: str, hasta: str) -> dict:
-    if usando_convex():
-        # Para Convex calculamos en Python con los datos crudos
-        ventas = convex_query("ventas:listar",
-                              {"desde": desde, "hasta": hasta}) or []
-        ingresos = sum(v.get("total", 0) for v in ventas)
-        # El detalle se calcula sumando margen_total guardado
-        costo_productos = 0  # Se puede mejorar con query a detalle_ventas
-        gastos = sum(g.get("monto", 0) for g in
-                     (convex_query("gastos:listar",
-                      {"desde": desde, "hasta": hasta}) or []))
-        merma = sum(m.get("costo_total", 0) for m in
-                    (convex_query("mermas:listar",
-                     {"desde": desde, "hasta": hasta}) or []))
-        ganancia_neta = ingresos - costo_productos - gastos - merma
-        margen_pct = (ganancia_neta / ingresos * 100) if ingresos else 0
-        return {
-            "ingresos": ingresos,
-            "costo_productos": costo_productos,
-            "gastos": gastos,
-            "merma": merma,
-            "ganancia_neta": ganancia_neta,
-            "margen_pct": margen_pct,
-        }
-    else:
-        r = sqlite_query("""
-            SELECT
-                COALESCE(SUM(dv.subtotal), 0) AS ingresos,
-                COALESCE(SUM(dv.cantidad * COALESCE(dv.costo_unitario, p.costo, 0)), 0) AS costo_productos
-            FROM detalle_ventas dv
-            JOIN ventas v ON v.id = dv.venta_id
-            JOIN productos p ON p.id = dv.producto_id
-            WHERE DATE(v.creado_en) BETWEEN DATE(?) AND DATE(?)
-        """, [desde, hasta])
-
-        base = r[0] if r else {"ingresos": 0, "costo_productos": 0}
-        ingresos = base["ingresos"]
-        costo_productos = base["costo_productos"]
-
-        g = sqlite_query("""
-            SELECT COALESCE(SUM(monto), 0) AS gastos
-            FROM gastos WHERE DATE(fecha) BETWEEN DATE(?) AND DATE(?)
-        """, [desde, hasta])
-        gastos = g[0]["gastos"] if g else 0
-
-        m = sqlite_query("""
-            SELECT COALESCE(SUM(costo_total), 0) AS merma
-            FROM mermas WHERE DATE(fecha) BETWEEN DATE(?) AND DATE(?)
-        """, [desde, hasta])
-        merma = m[0]["merma"] if m else 0
-
-        ganancia_neta = ingresos - costo_productos - gastos - merma
-        margen_pct = (ganancia_neta / ingresos * 100) if ingresos else 0
-
-        return {
-            "ingresos":         ingresos,
-            "costo_productos":  costo_productos,
-            "gastos":           gastos,
-            "merma":            merma,
-            "ganancia_neta":    ganancia_neta,
-            "margen_pct":       margen_pct,
-        }
+    ventas = _required_query("ventas:listar", {"desde": desde, "hasta": hasta}) or []
+    ingresos = sum(v.get("total", 0) for v in ventas)
+    gastos = sum(g.get("monto", 0) for g in get_gastos(desde, hasta))
+    merma = sum(m.get("costo_total", 0) for m in get_mermas(desde, hasta))
+    costo_productos = 0
+    ganancia_neta = ingresos - costo_productos - gastos - merma
+    margen_pct = (ganancia_neta / ingresos * 100) if ingresos else 0
+    return {
+        "ingresos": ingresos,
+        "costo_productos": costo_productos,
+        "gastos": gastos,
+        "merma": merma,
+        "ganancia_neta": ganancia_neta,
+        "margen_pct": margen_pct,
+    }
 
 
-# ── Gastos ─────────────────────────────────────────────────
 def get_gastos(desde: str, hasta: str):
-    if usando_convex():
-        return convex_query("gastos:listar",
-                            {"desde": desde, "hasta": hasta}) or []
-    else:
-        return sqlite_query("""
-            SELECT * FROM gastos
-            WHERE DATE(fecha) BETWEEN DATE(?) AND DATE(?)
-            ORDER BY fecha DESC
-        """, [desde, hasta]) or []
+    return _required_query("gastos:listar", {"desde": desde, "hasta": hasta}) or []
 
 
 def crear_gasto(datos: dict):
-    if usando_convex():
-        return convex_mutation("gastos:crear", datos)
-    else:
-        return sqlite_query("""
-            INSERT INTO gastos (categoria, descripcion, monto, fecha)
-            VALUES (?, ?, ?, ?)
-        """, [
-            datos["categoria"], datos["descripcion"],
-            datos["monto"], datos["fecha"]
-        ], fetch=False)
+    return _required_mutation("gastos:crear", {
+        "categoria": datos["categoria"],
+        "descripcion": datos["descripcion"],
+        "monto": float(datos["monto"]),
+        "fecha": datos["fecha"],
+    })
 
 
-# ── Mermas ─────────────────────────────────────────────────
 def get_mermas(desde: str, hasta: str):
-    if usando_convex():
-        return convex_query("mermas:listar",
-                            {"desde": desde, "hasta": hasta}) or []
-    else:
-        return sqlite_query("""
-            SELECT * FROM mermas
-            WHERE DATE(fecha) BETWEEN DATE(?) AND DATE(?)
-            ORDER BY fecha DESC
-        """, [desde, hasta]) or []
+    return _required_query("mermas:listar", {"desde": desde, "hasta": hasta}) or []
 
 
 def crear_merma(datos: dict):
-    if usando_convex():
-        return convex_mutation("mermas:crear", datos)
-    else:
-        prod = sqlite_query(
-            "SELECT nombre, costo FROM productos WHERE id=?",
-            [datos["producto_id"]]
-        )
-        nombre = prod[0]["nombre"] if prod else "Desconocido"
-        costo  = prod[0]["costo"] if prod else 0
-        costo_total = costo * datos["cantidad"]
-
-        sqlite_query("""
-            UPDATE productos SET stock = stock - ? WHERE id=?
-        """, [datos["cantidad"], datos["producto_id"]],
-            fetch=False)
-
-        return sqlite_query("""
-            INSERT INTO mermas
-                (producto_id, producto_nombre, cantidad,
-                 costo_unitario, costo_total, motivo, fecha)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, [
-            datos["producto_id"], nombre, datos["cantidad"],
-            costo, costo_total, datos["motivo"], datos["fecha"]
-        ], fetch=False)
+    return _required_mutation("mermas:crear", {
+        "producto_id": datos["producto_id"],
+        "cantidad": float(datos["cantidad"]),
+        "motivo": datos["motivo"],
+        "fecha": datos["fecha"],
+    })
 
 
-# ── Comparativas ───────────────────────────────────────────
 def get_comparativa(periodo: str):
-    if periodo == "semanal":
-        query = """
-            SELECT strftime('%w', creado_en) AS grupo,
-                   COALESCE(SUM(total), 0) AS total
-            FROM ventas
-            WHERE creado_en >= DATE('now', '-7 days')
-            GROUP BY grupo ORDER BY grupo
-        """
-    elif periodo == "mensual":
-        query = """
-            SELECT strftime('%d', creado_en) AS grupo,
-                   COALESCE(SUM(total), 0) AS total
-            FROM ventas
-            WHERE creado_en >= DATE('now', 'start of month')
-            GROUP BY grupo ORDER BY grupo
-        """
-    else:  # anual
-        query = """
-            SELECT strftime('%m', creado_en) AS grupo,
-                   COALESCE(SUM(total), 0) AS total
-            FROM ventas
-            WHERE creado_en >= DATE('now', 'start of year')
-            GROUP BY grupo ORDER BY grupo
-        """
-    return sqlite_query(query) or []
+    ventas = get_ventas()
+    totales = {}
+    for venta in ventas:
+        fecha = venta["creado_en"]
+        if periodo == "semanal":
+            grupo = str(datetime.fromisoformat(fecha).weekday())
+        elif periodo == "mensual":
+            grupo = fecha[-2:]
+        else:
+            grupo = fecha[5:7]
+        totales[grupo] = totales.get(grupo, 0) + venta.get("total", 0)
+    return [{"grupo": k, "total": v} for k, v in sorted(totales.items())]
 
 
-# ── Cortes de caja (para reportes) ─────────────────────────
-def get_cortes_caja(desde: str, hasta: str):
-    return sqlite_query("""
-        SELECT * FROM cortes_caja
-        WHERE DATE(fecha) BETWEEN DATE(?) AND DATE(?)
-        ORDER BY fecha DESC
-    """, [desde, hasta]) or []
+def get_caja_hoy():
+    resumen = get_resumen_dia()
+    return [{
+        "total_ventas": resumen["total_ventas"],
+        "total_ingresos": resumen["total"],
+        "efectivo": resumen["efectivo"],
+        "tarjeta": resumen["tarjeta"],
+    }]
+
+
+def crear_corte_caja(datos: dict):
+    return _required_mutation("cortes_caja:crear", datos)
+
+
+def get_cortes_caja(desde: str | None = None, hasta: str | None = None):
+    args = {}
+    if desde:
+        args["desde"] = str(desde)
+    if hasta:
+        args["hasta"] = str(hasta)
+    return _required_query("cortes_caja:listar", args) or []

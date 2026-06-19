@@ -55,6 +55,28 @@ export const crear = mutation({
   },
 });
 
+export const cambiar_password = mutation({
+  args: {
+    id: v.id("usuarios"),
+    password_hash: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.patch(args.id, {
+      password_hash: args.password_hash,
+    });
+  },
+});
+
+export const toggle_activo = mutation({
+  args: {
+    id: v.id("usuarios"),
+    activo: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.patch(args.id, { activo: args.activo });
+  },
+});
+
 export const seed = mutation({
   args: {},
   handler: async (ctx) => {

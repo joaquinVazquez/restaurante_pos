@@ -2,7 +2,13 @@
 import flet as ft
 import shutil
 import os
-from database.connection import execute_query
+from database.db_manager import (
+    actualizar_producto,
+    crear_producto,
+    desactivar_producto,
+    get_categorias,
+    get_productos,
+)
 
 COLOR_TEXTO      = "#2c3e50"
 COLOR_SUBTEXTO   = "#7f8c8d"
@@ -19,19 +25,10 @@ RUTA_IMAGENES = "assets/productos"
 def productos_view(page: ft.Page):
 
     def cargar_productos(busqueda=""):
-        return execute_query("""
-            SELECT p.id, p.nombre, p.precio, p.stock,
-                   c.nombre AS categoria, p.activo, p.imagen
-            FROM productos p
-            LEFT JOIN categorias c ON p.categoria_id = c.id
-            WHERE LOWER(p.nombre) LIKE LOWER(%s)
-            ORDER BY p.nombre
-        """, [f"%{busqueda}%"])
+        return get_productos(busqueda=busqueda, include_sin_stock=True)
 
     def cargar_categorias():
-        return execute_query(
-            "SELECT id, nombre FROM categorias WHERE activo = TRUE ORDER BY nombre"
-        )
+        return get_categorias()
 
     imagen_seleccionada = {"ruta": None}
 
@@ -321,25 +318,26 @@ def productos_view(page: ft.Page):
         try:
             precio_f = float(precio)
             stock_i  = int(stock)
-            cat_id   = int(dd_categoria.value) if dd_categoria.value else None
+            cat_id   = str(dd_categoria.value) if dd_categoria.value else None
             imagen   = imagen_seleccionada["ruta"]
 
             if producto_editando["id"]:
-                execute_query("""
-                    UPDATE productos
-                    SET nombre=%s, precio=%s, stock=%s,
-                        categoria_id=%s, imagen=%s
-                    WHERE id=%s
-                """, [nombre, precio_f, stock_i, cat_id,
-                      imagen, producto_editando["id"]], fetch=False)
+                actualizar_producto(producto_editando["id"], {
+                    "nombre": nombre,
+                    "precio": precio_f,
+                    "stock": stock_i,
+                    "categoria_id": cat_id,
+                    "imagen": imagen,
+                })
                 msg = "✅ Producto actualizado"
             else:
-                execute_query("""
-                    INSERT INTO productos
-                        (nombre, precio, stock, categoria_id, imagen)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, [nombre, precio_f, stock_i, cat_id, imagen],
-                     fetch=False)
+                crear_producto({
+                    "nombre": nombre,
+                    "precio": precio_f,
+                    "stock": stock_i,
+                    "categoria_id": cat_id,
+                    "imagen": imagen,
+                })
                 msg = "✅ Producto agregado"
 
             cerrar_dialogo()
@@ -391,10 +389,7 @@ def productos_view(page: ft.Page):
         page.update()
 
     def ejecutar_eliminar():
-        execute_query(
-            "UPDATE productos SET activo = FALSE WHERE id = %s",
-            [producto_a_eliminar["id"]], fetch=False
-        )
+        desactivar_producto(producto_a_eliminar["id"])
         cerrar_eliminar()
         refrescar_tabla()
         page.snack_bar = ft.SnackBar(

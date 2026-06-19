@@ -9,7 +9,9 @@
  */
 
 import type * as categorias from "../categorias.js";
+import type * as clientes from "../clientes.js";
 import type * as configuracion from "../configuracion.js";
+import type * as cortes_caja from "../cortes_caja.js";
 import type * as gastos from "../gastos.js";
 import type * as mermas from "../mermas.js";
 import type * as productos from "../productos.js";
@@ -24,7 +26,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   categorias: typeof categorias;
+  clientes: typeof clientes;
   configuracion: typeof configuracion;
+  cortes_caja: typeof cortes_caja;
   gastos: typeof gastos;
   mermas: typeof mermas;
   productos: typeof productos;

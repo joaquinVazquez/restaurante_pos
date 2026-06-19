@@ -1,6 +1,5 @@
 # main.py
 import flet as ft
-from database.init_db import inicializar_bd
 from database.db_manager import verificar_conexion
 from controllers.auth_controller import (
     cerrar_sesion, get_modulos_permitidos
@@ -19,7 +18,6 @@ COLOR_FONDO      = "#f0f4f8"
 BREAKPOINT_MOVIL = 800
 BOTTOM_NAV_H     = 72
 
-inicializar_bd()
 verificar_conexion()
 
 NAV_ITEMS = {

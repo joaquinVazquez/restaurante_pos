@@ -17,7 +17,7 @@ def convex_query(path: str, args: dict = None):
                 "format": "json",
             },
             headers={"Content-Type": "application/json"},
-            timeout=10,
+            timeout=30,
         )
         response.raise_for_status()
         data = response.json()
@@ -47,7 +47,7 @@ def convex_mutation(path: str, args: dict = None):
                 "format": "json",
             },
             headers={"Content-Type": "application/json"},
-            timeout=10,
+            timeout=30,
         )
         response.raise_for_status()
         data = response.json()

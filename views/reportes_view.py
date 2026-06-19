@@ -7,7 +7,7 @@ from database.db_manager import (
     get_gastos, crear_gasto,
     get_mermas, crear_merma,
     get_comparativa, get_cortes_caja,
-    get_productos,
+    get_productos, get_ventas,
 )
 
 CATEGORIAS_GASTO = ["Insumos", "Renta", "Servicios",
@@ -50,10 +50,13 @@ def reportes_view(page: ft.Page):
         return desde.value, hasta.value
 
     # ════════════════════ TAB 1: VENTAS ═══════════════════
-    ventas_stats = ft.Row(spacing=12, wrap=True)
-    cortes_list  = ft.Column(spacing=8,
-                              scroll=ft.ScrollMode.AUTO,
-                              expand=True)
+    ventas_stats   = ft.Row(spacing=12, wrap=True, run_spacing=12)
+    cortes_list    = ft.Column(spacing=8,
+                                scroll=ft.ScrollMode.AUTO,
+                                expand=True)
+    historial_list = ft.Column(spacing=8,
+                                scroll=ft.ScrollMode.AUTO,
+                                expand=True)
 
     def stat_box(icono, label, valor, color):
         return ft.Container(
@@ -71,13 +74,15 @@ def reportes_view(page: ft.Page):
             bgcolor=COLOR_FONDO,
             border_radius=10,
             padding=14,
-            expand=True,
+            width=160,
+            height=90,
         )
 
     def cargar_ventas():
         d, h = rango()
-        data = get_reporte_ventas(d, h)
-        cortes = get_cortes_caja(d, h)
+        data    = get_reporte_ventas(d, h)
+        cortes  = get_cortes_caja(d, h)
+        ventas  = [v for v in get_ventas(d, h)]
 
         ventas_stats.controls = [
             stat_box("💰", "Ingresos",
@@ -102,16 +107,17 @@ def reportes_view(page: ft.Page):
                     padding=12,
                     content=ft.Row(
                         controls=[
-                            ft.Text(str(c["fecha"]),
+                            ft.Text(str(c.get("fecha", "")),
                                     expand=True, size=13),
-                            ft.Text(f"🧾 {c['total_ventas']}",
+                            ft.Text(f"🧾 {c.get('total_ventas', 0)}",
                                     size=12,
                                     color=COLOR_SUBTEXTO,
                                     width=70),
-                            ft.Text(f"${c['total_ingresos']:.2f}",
-                                    weight=ft.FontWeight.BOLD,
-                                    size=13,
-                                    color=COLOR_ACENTO),
+                            ft.Text(
+                                f"${c.get('total_ingresos', 0):.2f}",
+                                weight=ft.FontWeight.BOLD,
+                                size=13,
+                                color=COLOR_ACENTO),
                         ],
                     ),
                 )
@@ -122,16 +128,65 @@ def reportes_view(page: ft.Page):
                 ft.Text("Sin cortes de caja en este rango",
                         color=COLOR_SUBTEXTO, italic=True)
             ]
+
+        if ventas:
+            historial_list.controls = [
+                ft.Container(
+                    bgcolor=COLOR_FONDO,
+                    border_radius=8,
+                    padding=12,
+                    content=ft.Row(
+                        controls=[
+                            ft.Text(f"#{str(v['id'])[:8]}",
+                                    size=12, color=COLOR_TEXTO,
+                                    weight=ft.FontWeight.BOLD,
+                                    width=80),
+                            ft.Text(str(v["creado_en"]),
+                                    size=12,
+                                    color=COLOR_SUBTEXTO,
+                                    expand=True),
+                            ft.Container(
+                                content=ft.Text(
+                                    "💵 Efectivo"
+                                    if v["metodo_pago"] == "efectivo"
+                                    else "💳 Tarjeta",
+                                    size=11, color="white"),
+                                bgcolor=COLOR_ACENTO
+                                if v["metodo_pago"] == "efectivo"
+                                else COLOR_AZUL,
+                                border_radius=20,
+                                padding=ft.padding.symmetric(
+                                    horizontal=8, vertical=4)),
+                            ft.Text(f"${v['total']:.2f}",
+                                    size=13,
+                                    color=COLOR_ACENTO,
+                                    weight=ft.FontWeight.BOLD,
+                                    width=80,
+                                    text_align=ft.TextAlign.RIGHT),
+                        ],
+                        spacing=10
+                    ),
+                )
+                for v in ventas
+            ]
+        else:
+            historial_list.controls = [
+                ft.Text("Sin ventas en este rango",
+                        color=COLOR_SUBTEXTO, italic=True)
+            ]
+
         page.update()
 
     ventas_tab = card(
         ft.Column(
-            expand=True,
             scroll=ft.ScrollMode.AUTO,
             controls=[
-                ft.Text("📊 Ventas y Cortes de Caja", size=18,
-                        weight=ft.FontWeight.BOLD,
-                        color=COLOR_TEXTO),
+                ft.Container(
+                    content=ft.Text("📊 Ventas y Cortes de Caja", size=18,
+                            weight=ft.FontWeight.BOLD,
+                            color=COLOR_TEXTO),
+                    height=30,
+                ),
                 ft.Row([desde, hasta,
                        ft.ElevatedButton(
                            "🔄 Actualizar", height=48,
@@ -139,6 +194,11 @@ def reportes_view(page: ft.Page):
                            on_click=lambda e: cargar_todo())
                        ], spacing=12),
                 ventas_stats,
+                ft.Divider(),
+                ft.Text("Historial de Ventas", size=14,
+                        weight=ft.FontWeight.BOLD,
+                        color=COLOR_TEXTO),
+                historial_list,
                 ft.Divider(),
                 ft.Text("Historial de Cortes de Caja", size=14,
                         weight=ft.FontWeight.BOLD,
@@ -201,7 +261,6 @@ def reportes_view(page: ft.Page):
 
     margen_tab = card(
         ft.Column(
-            expand=True,
             scroll=ft.ScrollMode.AUTO,
             controls=[
                 ft.Text("📈 Margen Real de Ganancia", size=18,
@@ -282,7 +341,6 @@ def reportes_view(page: ft.Page):
 
     gastos_tab = card(
         ft.Column(
-            expand=True,
             controls=[
                 ft.Text("🧾 Gastos del Negocio", size=18,
                         weight=ft.FontWeight.BOLD,
@@ -304,7 +362,7 @@ def reportes_view(page: ft.Page):
     merma_list = ft.Column(spacing=8,
                            scroll=ft.ScrollMode.AUTO,
                            expand=True)
-    productos_disp = get_productos()
+    productos_disp = get_productos(include_sin_stock=True)
     merma_producto = ft.Dropdown(
         label="Producto", height=48, expand=True,
         options=[ft.dropdown.Option(str(p["id"]), p["nombre"])
@@ -369,7 +427,6 @@ def reportes_view(page: ft.Page):
 
     merma_tab = card(
         ft.Column(
-            expand=True,
             controls=[
                 ft.Text("📉 Merma y Pérdidas", size=18,
                         weight=ft.FontWeight.BOLD,
@@ -446,7 +503,6 @@ def reportes_view(page: ft.Page):
 
     comparativas_tab = card(
         ft.Column(
-            expand=True,
             controls=[
                 ft.Text("📊 Comparativas de Ventas", size=18,
                         weight=ft.FontWeight.BOLD,
@@ -485,25 +541,31 @@ def reportes_view(page: ft.Page):
     cargar_mermas()
     cargar_comparativa()
 
-    return ft.Column(
+    return ft.Container(
         expand=True,
-        spacing=12,
-        controls=[
-            ft.Text("📊 Reportes", size=22,
-                    weight=ft.FontWeight.BOLD,
-                    color=COLOR_TEXTO),
-            ft.Tabs(
-                selected_index=0,
-                animation_duration=250,
-                expand=True,
-                tabs=[
-                    ft.Tab(text="Ventas", content=ventas_tab),
-                    ft.Tab(text="Margen", content=margen_tab),
-                    ft.Tab(text="Gastos", content=gastos_tab),
-                    ft.Tab(text="Merma", content=merma_tab),
-                    ft.Tab(text="Comparativas",
-                          content=comparativas_tab),
-                ],
-            ),
-        ],
+        content=ft.Column(
+            expand=True,
+            spacing=12,
+            controls=[
+                ft.Text("📊 Reportes", size=22,
+                        weight=ft.FontWeight.BOLD,
+                        color=COLOR_TEXTO),
+                ft.Container(
+                    expand=True,
+                    content=ft.Tabs(
+                        selected_index=0,
+                        animation_duration=250,
+                        expand=True,
+                        tabs=[
+                            ft.Tab(text="Ventas", content=ventas_tab),
+                            ft.Tab(text="Margen", content=margen_tab),
+                            ft.Tab(text="Gastos", content=gastos_tab),
+                            ft.Tab(text="Merma", content=merma_tab),
+                            ft.Tab(text="Comparativas",
+                                  content=comparativas_tab),
+                        ],
+                    )
+                ),
+            ],
+        )
     )

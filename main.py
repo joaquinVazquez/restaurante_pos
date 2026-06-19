@@ -127,7 +127,12 @@ def main(page: ft.Page):
         elif modulo == "productos":
             contenido = productos_view(page)
         elif modulo == "reportes":
-            contenido = reportes_view(page)
+            try:
+                contenido = reportes_view(page)
+            except Exception as ex:
+                import traceback
+                traceback.print_exc()
+                contenido = ft.Text(f"ERROR: {ex}", color="red", size=14)
         elif modulo == "caja":
             contenido = caja_view(page)
         elif modulo == "clientes":

@@ -1,6 +1,9 @@
 # views/clientes_view.py
 import flet as ft
-from database.connection import execute_query
+from database.db_manager import (
+    get_clientes, crear_cliente, actualizar_cliente,
+    desactivar_cliente, get_historial_cliente
+)
 
 COLOR_TEXTO      = "#2c3e50"
 COLOR_SUBTEXTO   = "#7f8c8d"
@@ -14,50 +17,14 @@ COLOR_FONDO      = "#f0f4f8"
 
 def clientes_view(page: ft.Page):
 
-    # ── Consultas ──────────────────────────────────────────
-    def get_clientes(busqueda=""):
-        return execute_query("""
-            SELECT c.id, c.nombre, c.telefono, c.email,
-                   c.direccion, c.notas, c.activo,
-                   COUNT(v.id)              AS total_compras,
-                   COALESCE(SUM(v.total),0) AS total_gastado
-            FROM clientes c
-            LEFT JOIN ventas v ON v.cliente_id = c.id
-            WHERE c.activo = TRUE
-              AND (LOWER(c.nombre)   LIKE LOWER(%s)
-                OR LOWER(c.telefono) LIKE LOWER(%s)
-                OR LOWER(c.email)    LIKE LOWER(%s))
-            GROUP BY c.id, c.nombre, c.telefono,
-                     c.email, c.direccion, c.notas, c.activo
-            ORDER BY c.nombre
-        """, [f"%{busqueda}%", f"%{busqueda}%", f"%{busqueda}%"])
-
-    def get_historial(cliente_id):
-        return execute_query("""
-            SELECT v.id, v.total, v.metodo_pago, v.creado_en,
-                   COUNT(dv.id) AS productos
-            FROM ventas v
-            LEFT JOIN detalle_ventas dv ON dv.venta_id = v.id
-            WHERE v.cliente_id = %s
-            GROUP BY v.id, v.total, v.metodo_pago, v.creado_en
-            ORDER BY v.creado_en DESC
-        """, [cliente_id])
-
-    # ── Tabla principal ────────────────────────────────────
     tabla = ft.DataTable(
         columns=[
-            ft.DataColumn(ft.Text("Cliente",
-                                  weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Teléfono",
-                                  weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Email",
-                                  weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Compras",
-                                  weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Total Gastado",
-                                  weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Acciones",
-                                  weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Cliente", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Teléfono", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Email", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Compras", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Total Gastado", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
         ],
         rows=[],
         border=ft.border.all(1, "#e0e0e0"),
@@ -80,7 +47,7 @@ def clientes_view(page: ft.Page):
                                 ft.Text(c["nombre"], size=13,
                                         color=COLOR_TEXTO,
                                         weight=ft.FontWeight.BOLD),
-                                ft.Text(c["notas"] or "",
+                                ft.Text(c.get("notas") or "",
                                         size=11,
                                         color=COLOR_SUBTEXTO,
                                         italic=True),
@@ -89,16 +56,16 @@ def clientes_view(page: ft.Page):
                         )
                     ),
                     ft.DataCell(ft.Text(
-                        c["telefono"] or "—",
+                        c.get("telefono") or "—",
                         size=13, color=COLOR_TEXTO
                     )),
                     ft.DataCell(ft.Text(
-                        c["email"] or "—",
+                        c.get("email") or "—",
                         size=12, color=COLOR_SUBTEXTO
                     )),
                     ft.DataCell(ft.Container(
                         content=ft.Text(
-                            str(c["total_compras"]),
+                            str(c.get("total_compras", 0)),
                             size=11, color="white",
                             weight=ft.FontWeight.BOLD
                         ),
@@ -108,7 +75,7 @@ def clientes_view(page: ft.Page):
                             horizontal=10, vertical=4)
                     )),
                     ft.DataCell(ft.Text(
-                        f"${c['total_gastado']:.2f}",
+                        f"${c.get('total_gastado', 0):.2f}",
                         size=13, color=COLOR_AZUL,
                         weight=ft.FontWeight.BOLD
                     )),
@@ -140,7 +107,6 @@ def clientes_view(page: ft.Page):
             )
         page.update()
 
-    # ── Campos formulario ──────────────────────────────────
     campo_nombre    = ft.TextField(label="Nombre completo *",
                                    border_radius=8, expand=True)
     campo_telefono  = ft.TextField(label="Teléfono",
@@ -155,8 +121,7 @@ def clientes_view(page: ft.Page):
                                    border_radius=8, expand=True,
                                    multiline=True, min_lines=2,
                                    max_lines=3)
-    titulo_dialogo  = ft.Text("", size=18,
-                               weight=ft.FontWeight.BOLD)
+    titulo_dialogo  = ft.Text("", size=18, weight=ft.FontWeight.BOLD)
     cliente_editando = {"id": None}
 
     dialogo = ft.AlertDialog(
@@ -174,20 +139,16 @@ def clientes_view(page: ft.Page):
                     ft.Row(controls=[campo_direccion]),
                     ft.Row(controls=[campo_notas]),
                 ],
-                spacing=12,
-                tight=True
+                spacing=12, tight=True
             ),
-            width=460,
-            height=320,
-            padding=10
+            width=460, height=320, padding=10
         ),
         actions=[
             ft.TextButton("Cancelar",
                           on_click=lambda e: cerrar_dialogo()),
             ft.ElevatedButton(
                 "Guardar",
-                bgcolor=COLOR_ACENTO,
-                color="white",
+                bgcolor=COLOR_ACENTO, color="white",
                 on_click=lambda e: guardar_cliente()
             ),
         ],
@@ -211,10 +172,10 @@ def clientes_view(page: ft.Page):
         titulo_dialogo.value    = "✏️ Editar Cliente"
         cliente_editando["id"]  = cli["id"]
         campo_nombre.value      = cli["nombre"]
-        campo_telefono.value    = cli["telefono"] or ""
-        campo_email.value       = cli["email"] or ""
-        campo_direccion.value   = cli["direccion"] or ""
-        campo_notas.value       = cli["notas"] or ""
+        campo_telefono.value    = cli.get("telefono") or ""
+        campo_email.value       = cli.get("email") or ""
+        campo_direccion.value   = cli.get("direccion") or ""
+        campo_notas.value       = cli.get("notas") or ""
         if dialogo not in page.overlay:
             page.overlay.append(dialogo)
         dialogo.open = True
@@ -236,33 +197,19 @@ def clientes_view(page: ft.Page):
             page.update()
             return
 
+        datos = {
+            "nombre":    nombre,
+            "telefono":  campo_telefono.value.strip() or None,
+            "email":     campo_email.value.strip() or None,
+            "direccion": campo_direccion.value.strip() or None,
+            "notas":     campo_notas.value.strip() or None,
+        }
+
         if cliente_editando["id"]:
-            execute_query("""
-                UPDATE clientes
-                SET nombre=%s, telefono=%s, email=%s,
-                    direccion=%s, notas=%s
-                WHERE id=%s
-            """, [
-                nombre,
-                campo_telefono.value.strip() or None,
-                campo_email.value.strip() or None,
-                campo_direccion.value.strip() or None,
-                campo_notas.value.strip() or None,
-                cliente_editando["id"]
-            ], fetch=False)
+            actualizar_cliente(cliente_editando["id"], datos)
             msg = "✅ Cliente actualizado"
         else:
-            execute_query("""
-                INSERT INTO clientes
-                    (nombre, telefono, email, direccion, notas)
-                VALUES (%s, %s, %s, %s, %s)
-            """, [
-                nombre,
-                campo_telefono.value.strip() or None,
-                campo_email.value.strip() or None,
-                campo_direccion.value.strip() or None,
-                campo_notas.value.strip() or None,
-            ], fetch=False)
+            crear_cliente(datos)
             msg = "✅ Cliente agregado"
 
         cerrar_dialogo()
@@ -274,8 +221,6 @@ def clientes_view(page: ft.Page):
         page.snack_bar.open = True
         page.update()
 
-    # ── Eliminar ───────────────────────────────────────────
-    cliente_a_eliminar = {"id": None}
     dialogo_eliminar = ft.AlertDialog(
         modal=True,
         title=ft.Text("🗑️ Eliminar Cliente"),
@@ -291,6 +236,7 @@ def clientes_view(page: ft.Page):
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
+    cliente_a_eliminar = {"id": None}
 
     def confirmar_eliminar(cli):
         cliente_a_eliminar["id"] = cli["id"]
@@ -304,10 +250,7 @@ def clientes_view(page: ft.Page):
         page.update()
 
     def ejecutar_eliminar():
-        execute_query(
-            "UPDATE clientes SET activo=FALSE WHERE id=%s",
-            [cliente_a_eliminar["id"]], fetch=False
-        )
+        desactivar_cliente(cliente_a_eliminar["id"])
         cerrar_eliminar()
         refrescar_tabla()
         page.snack_bar = ft.SnackBar(
@@ -317,19 +260,13 @@ def clientes_view(page: ft.Page):
         page.snack_bar.open = True
         page.update()
 
-    # ── Historial de compras ───────────────────────────────
     tabla_historial = ft.DataTable(
         columns=[
-            ft.DataColumn(ft.Text("# Venta",
-                                  weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Fecha",
-                                  weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Productos",
-                                  weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Total",
-                                  weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Pago",
-                                  weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("# Venta", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Fecha", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Productos", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Total", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Pago", weight=ft.FontWeight.BOLD)),
         ],
         rows=[],
         border=ft.border.all(1, "#e0e0e0"),
@@ -340,18 +277,13 @@ def clientes_view(page: ft.Page):
     )
 
     nombre_cliente_historial = ft.Text(
-        "", size=16, weight=ft.FontWeight.BOLD,
-        color=COLOR_TEXTO
+        "", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXTO
     )
 
     dialogo_historial = ft.AlertDialog(
         modal=True,
-        title=ft.Row(
-            controls=[
-                ft.Text("📋 Historial de Compras",
-                        size=16, weight=ft.FontWeight.BOLD),
-            ]
-        ),
+        title=ft.Text("📋 Historial de Compras",
+                      size=16, weight=ft.FontWeight.BOLD),
         content=ft.Container(
             content=ft.Column(
                 controls=[
@@ -362,21 +294,16 @@ def clientes_view(page: ft.Page):
                             controls=[tabla_historial],
                             expand=True
                         ),
-                        height=300,
-                        expand=True
+                        height=300, expand=True
                     )
                 ],
-                spacing=8,
-                tight=True
+                spacing=8, tight=True
             ),
-            width=600,
-            padding=10
+            width=600, padding=10
         ),
         actions=[
-            ft.TextButton(
-                "Cerrar",
-                on_click=lambda e: cerrar_historial()
-            ),
+            ft.TextButton("Cerrar",
+                          on_click=lambda e: cerrar_historial()),
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
@@ -388,10 +315,10 @@ def clientes_view(page: ft.Page):
     def ver_historial(cli):
         nombre_cliente_historial.value = (
             f"Cliente: {cli['nombre']} — "
-            f"{cli['total_compras']} compras — "
-            f"${cli['total_gastado']:.2f} total"
+            f"{cli.get('total_compras', 0)} compras — "
+            f"${cli.get('total_gastado', 0):.2f} total"
         )
-        historial = get_historial(cli["id"])
+        historial = get_historial_cliente(cli["id"])
         tabla_historial.rows.clear()
 
         if not historial:
@@ -411,31 +338,31 @@ def clientes_view(page: ft.Page):
                 tabla_historial.rows.append(
                     ft.DataRow(cells=[
                         ft.DataCell(ft.Text(
-                            f"#{v['id']}", size=13,
+                            f"#{str(v['id'])[:8]}", size=13,
                             color=COLOR_TEXTO,
                             weight=ft.FontWeight.BOLD
                         )),
                         ft.DataCell(ft.Text(
-                            v["creado_en"].strftime("%d/%m/%Y %H:%M"),
+                            str(v.get("creado_en", "")),
                             size=12, color=COLOR_SUBTEXTO
                         )),
                         ft.DataCell(ft.Text(
-                            str(v["productos"]),
+                            str(v.get("productos", 0)),
                             size=13, color=COLOR_TEXTO
                         )),
                         ft.DataCell(ft.Text(
-                            f"${v['total']:.2f}",
+                            f"${v.get('total', 0):.2f}",
                             size=13, color=COLOR_ACENTO,
                             weight=ft.FontWeight.BOLD
                         )),
                         ft.DataCell(ft.Container(
                             content=ft.Text(
-                                "💵" if v["metodo_pago"] == "efectivo"
+                                "💵" if v.get("metodo_pago") == "efectivo"
                                 else "💳",
                                 size=14
                             ),
                             bgcolor=COLOR_ACENTO
-                            if v["metodo_pago"] == "efectivo"
+                            if v.get("metodo_pago") == "efectivo"
                             else COLOR_AZUL,
                             border_radius=20,
                             padding=ft.padding.symmetric(
@@ -449,19 +376,14 @@ def clientes_view(page: ft.Page):
         dialogo_historial.open = True
         page.update()
 
-    # ── Búsqueda ───────────────────────────────────────────
     campo_busqueda = ft.TextField(
         hint_text="🔍 Buscar por nombre, teléfono o email...",
         on_change=lambda e: refrescar_tabla(e.control.value),
-        border_radius=8,
-        height=42,
-        expand=True,
-        bgcolor="white"
+        border_radius=8, height=42, expand=True, bgcolor="white"
     )
 
     refrescar_tabla()
 
-    # ── Layout ─────────────────────────────────────────────
     return ft.Column(
         controls=[
             ft.Row(
@@ -479,10 +401,8 @@ def clientes_view(page: ft.Page):
                     ft.Container(expand=True),
                     ft.ElevatedButton(
                         "➕ Agregar Cliente",
-                        bgcolor=COLOR_ACENTO,
-                        color="white",
-                        height=42,
-                        on_click=abrir_agregar
+                        bgcolor=COLOR_ACENTO, color="white",
+                        height=42, on_click=abrir_agregar
                     ),
                 ]
             ),
@@ -491,16 +411,12 @@ def clientes_view(page: ft.Page):
             ft.Container(height=8),
             ft.Container(
                 content=ft.ListView(
-                    controls=[tabla],
-                    expand=True
+                    controls=[tabla], expand=True
                 ),
                 bgcolor=COLOR_TARJETA,
-                border_radius=12,
-                padding=8,
-                expand=True,
+                border_radius=12, padding=8, expand=True,
                 shadow=ft.BoxShadow(
-                    blur_radius=8,
-                    color="#00000010",
+                    blur_radius=8, color="#00000010",
                     offset=ft.Offset(0, 2)
                 )
             )

@@ -19,6 +19,6 @@
   },
   "homepage": "https://github.com/scarlyPadilla/restaurante_pos#readme",
   "dependencies": {
-    "convex": "^1.41.0"
+    "convex": "^1.42.0"
   }
 }

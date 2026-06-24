@@ -14,6 +14,23 @@ from views.reportes_view import reportes_view
 from views.caja_view import caja_view
 from views.clientes_view import clientes_view
 
+
+import sys
+import os
+import site
+
+# 1. Obtener la ruta de los paquetes instalados en el entorno virtual
+venv_site_packages = site.getsitepackages()[0]
+
+# 2. Mover la ruta del entorno virtual al principio de sys.path
+if venv_site_packages in sys.path:
+    sys.path.remove(venv_site_packages)
+sys.path.insert(0, venv_site_packages)
+
+# 3. Ahora las importaciones de la aplicación (incluyendo Convex)
+from database.db_manager import verificar_conexion
+
+
 COLOR_FONDO      = "#f0f4f8"
 BREAKPOINT_MOVIL = 800
 BOTTOM_NAV_H     = 72

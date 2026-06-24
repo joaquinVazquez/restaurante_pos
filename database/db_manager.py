@@ -1,20 +1,44 @@
+import os
+from dotenv import load_dotenv
+from convex import ConvexClient
 from datetime import date, datetime
 
-from database.convex_client import convex_mutation, convex_query
+# SE ELIMINÓ LA IMPORTACIÓN DE convex_client PORQUE ES REDUNDANTE Y ENMASCARA ERRORES
+# from database.convex_client import convex_mutation, convex_query
+
+# 1. Cargar el .env explícitamente
+load_dotenv()
+
+# 2. Leer la URL
+CONVEX_URL = os.getenv("CONVEX_URL")
+
+if not CONVEX_URL:
+    raise ValueError("La variable CONVEX_URL no está definida en el archivo .env")
+
+# 3. Instanciar el cliente
+client = ConvexClient(CONVEX_URL)
 
 
 def _required_query(path: str, args: dict | None = None):
-    result = convex_query(path, args)
-    if result is None:
+    try:
+        # Se ejecuta directamente sobre el cliente local validado
+        result = client.query(path, args)
+        return result
+    except Exception as e:
+        # Trazabilidad estricta sin Exception Swallowing
+        print(f"\n[DEBUG] Falla nativa Convex (Query '{path}'): {type(e).__name__} - {str(e)}\n")
         raise ConnectionError(f"No se pudo consultar Convex: {path}")
-    return result
 
 
 def _required_mutation(path: str, args: dict | None = None):
-    result = convex_mutation(path, args)
-    if result is None:
+    try:
+        # Se ejecuta directamente sobre el cliente local validado
+        result = client.mutation(path, args)
+        return result
+    except Exception as e:
+        # Trazabilidad estricta sin Exception Swallowing
+        print(f"\n[DEBUG] Falla nativa Convex (Mutation '{path}'): {type(e).__name__} - {str(e)}\n")
         raise ConnectionError(f"No se pudo ejecutar Convex: {path}")
-    return result
 
 
 def _creation_date(item: dict) -> str:

@@ -142,14 +142,22 @@ def get_productos(busqueda=None, categoria_id=None, include_sin_stock=False):
 
 
 def crear_producto(datos: dict):
-    return _required_mutation("productos:crear", {
+    # 1. Definir los campos obligatorios
+    payload = {
         "nombre": datos.get("nombre"),
         "descripcion": datos.get("descripcion") or "",
         "precio": float(datos.get("precio", 0)),
         "stock": int(datos.get("stock", 0)),
-        "categoria_id": datos.get("categoria_id") or None,
-        "imagen": datos.get("imagen") or None,
-    })
+    }
+    
+    # 2. Inyectar campos opcionales únicamente si tienen un valor válido
+    if datos.get("categoria_id"):
+        payload["categoria_id"] = datos["categoria_id"]
+        
+    if datos.get("imagen"):
+        payload["imagen"] = datos["imagen"]
+        
+    return _required_mutation("productos:crear", payload)
 
 
 def actualizar_producto(producto_id, datos: dict):
@@ -303,18 +311,36 @@ def toggle_usuario_activo(usuario_id, activo: bool):
 
 
 def crear_categoria(datos: dict):
-    return _required_mutation("categorias:crear", {
-        "nombre": datos["nombre"],
-        "icono": datos.get("icono", ""),
-    })
+    # Validamos que el nombre exista
+    if not datos.get("nombre"):
+        raise ValueError("El nombre de la categoría es obligatorio")
+        
+    payload = {"nombre": datos["nombre"]}
+    
+    # Enviamos el icono solo si tiene contenido
+    if datos.get("icono"):
+        payload["icono"] = datos["icono"]
+        
+    return _required_mutation("categorias:crear", payload)
 
 
 def actualizar_categoria(categoria_id, datos: dict):
-    return _required_mutation("categorias:actualizar", {
-        "id": categoria_id,
-        "nombre": datos.get("nombre"),
-        "icono": datos.get("icono"),
-    })
+    # Construimos el payload dinámicamente para enviar solo lo que cambia
+    payload = {"id": categoria_id}
+    
+    # Solo agregamos campos si están presentes en 'datos' y tienen valor
+    if "nombre" in datos and datos["nombre"]:
+        payload["nombre"] = datos["nombre"]
+    
+    if "icono" in datos and datos["icono"]:
+        payload["icono"] = datos["icono"]
+        
+    # Si no hay nada que actualizar, no hacemos la llamada
+    if len(payload) == 1: # Solo el ID está presente
+        print("Advertencia: No hay datos para actualizar")
+        return None
+        
+    return _required_mutation("categorias:actualizar", payload)
 
 
 def eliminar_categoria(categoria_id):

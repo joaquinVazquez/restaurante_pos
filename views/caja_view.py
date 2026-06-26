@@ -3,7 +3,7 @@ import flet as ft
 import os
 from datetime import datetime, date
 from database.db_manager import (
-    get_resumen_dia, get_cortes_caja, crear_corte_caja
+    get_resumen_dia, get_cortes_caja, crear_corte_caja, get_ventas
 )
 
 COLOR_TEXTO      = "#2c3e50"
@@ -32,6 +32,37 @@ def caja_view(page: ft.Page):
         size=13, color=COLOR_SUBTEXTO
     )
 
+    def abrir_pdf(ruta):
+        try:
+            import subprocess
+
+            if os.path.exists(ruta):
+                subprocess.Popen(
+                    ["start", "", os.path.abspath(ruta)],
+                    shell=True
+                )
+            else:
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text(
+                        f"No existe el archivo:\n{ruta}",
+                        color="white"
+                    ),
+                    bgcolor=COLOR_ROJO
+                )
+                page.snack_bar.open = True
+                page.update()
+
+        except Exception as ex:
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text(
+                    f"Error al abrir PDF: {ex}",
+                    color="white"
+                ),
+                bgcolor=COLOR_ROJO
+            )
+            page.snack_bar.open = True
+            page.update()
+
     historial_list = ft.Column(spacing=8,
                                scroll=ft.ScrollMode.AUTO,
                                expand=True)
@@ -47,6 +78,68 @@ def caja_view(page: ft.Page):
     def limpiar_filtro(e):
         fecha_filtro.value = ""
         refrescar()
+
+    def abrir_ventas_del_dia(fecha):
+        ventas = get_ventas(fecha, fecha)
+
+        filas = []
+        for v in ventas:
+            filas.append(
+                ft.Row(
+                    controls=[
+                        ft.Text(f"#{str(v.get('id', ''))[:8]}", size=12,
+                                 color=COLOR_TEXTO, weight=ft.FontWeight.BOLD, width=80),
+                        ft.Container(
+                            content=ft.Text(
+                                "💵" if v.get("metodo_pago") == "efectivo" else "💳",
+                                size=12, color="white"),
+                            bgcolor=COLOR_NARANJA if v.get("metodo_pago") == "efectivo" else COLOR_MORADO,
+                            border_radius=16, padding=ft.padding.symmetric(horizontal=8, vertical=2),
+                        ),
+                        ft.Text(f"${v.get('total', 0):.2f}", size=13, color=COLOR_TEXTO,
+                                 weight=ft.FontWeight.BOLD, expand=True, text_align=ft.TextAlign.RIGHT),
+                    ],
+                    spacing=10,
+                )
+            )
+
+        if not filas:
+            filas = [ft.Text("Sin ventas registradas en esta fecha", color=COLOR_SUBTEXTO, italic=True)]
+
+        total_dia = sum(v.get("total", 0) for v in ventas)
+
+        def cerrar(e):
+            dialogo.open = False
+            page.update()
+
+        dialogo = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(f"🧾 Ventas del {fecha}"),
+            content=ft.Container(
+                width=380,
+                content=ft.Column(
+                    controls=[
+                        ft.Column(controls=filas, spacing=8, scroll=ft.ScrollMode.AUTO,
+                                   height=min(320, 40 + 36 * max(len(filas), 1))),
+                        ft.Divider(),
+                        ft.Row(
+                            controls=[
+                                ft.Text("TOTAL", size=14, weight=ft.FontWeight.BOLD, color=COLOR_TEXTO),
+                                ft.Text(f"${total_dia:.2f}", size=16, weight=ft.FontWeight.BOLD, color=COLOR_ACENTO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                        ),
+                    ],
+                    spacing=8,
+                    tight=True,
+                ),
+            ),
+            actions=[ft.TextButton("Cerrar", on_click=cerrar)],
+        )
+        if dialogo not in page.overlay:
+            page.overlay.append(dialogo)
+        dialogo.open = True
+        page.update()
 
     def refrescar(filtro_fecha=None):
         resumen = get_resumen_dia()
@@ -119,6 +212,12 @@ def caja_view(page: ft.Page):
                                         ft.Container(expand=True),
 
                                         ft.TextButton(
+                                            "🧾 Ver ventas",
+                                            on_click=lambda e, fecha=c.get("fecha", ""):
+                                                abrir_ventas_del_dia(fecha)
+                                        ),
+
+                                        ft.TextButton(
                                             "📄 Ver/Imprimir",
                                             on_click=lambda e, r=ruta_pdf:
                                                 abrir_pdf(r)
@@ -156,38 +255,7 @@ def caja_view(page: ft.Page):
 
         page.update()
     
-        def abrir_pdf(ruta):
-            try:
-                import subprocess
-
-                if os.path.exists(ruta):
-                    subprocess.Popen(
-                        ["start", "", os.path.abspath(ruta)],
-                        shell=True
-                    )
-                else:
-                    page.snack_bar = ft.SnackBar(
-                        content=ft.Text(
-                            f"No existe el archivo:\n{ruta}",
-                            color="white"
-                        ),
-                        bgcolor=COLOR_ROJO
-                    )
-                    page.snack_bar.open = True
-                    page.update()
-
-            except Exception as ex:
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text(
-                        f"Error al abrir PDF: {ex}",
-                        color="white"
-                    ),
-                    bgcolor=COLOR_ROJO
-                )
-                page.snack_bar.open = True
-                page.update()
-
-    def generar_pdf_corte(corte_id, resumen, obs):
+    def generar_pdf_corte(corte_id, resumen, obs, ventas_dia):
         try:
             from fpdf import FPDF
             pdf = FPDF()
@@ -229,6 +297,36 @@ def caja_view(page: ft.Page):
                 pdf.set_font("Helvetica", "", 10)
                 pdf.multi_cell(0, 7, obs)
 
+            if ventas_dia:
+                pdf.ln(6)
+                pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+                pdf.ln(6)
+                pdf.set_font("Helvetica", "B", 11)
+                pdf.cell(0, 8, "Detalle de ventas del día", ln=True)
+                pdf.ln(1)
+
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.cell(30, 7, "Hora", border=0)
+                pdf.cell(70, 7, "Venta #", border=0)
+                pdf.cell(40, 7, "Método", border=0)
+                pdf.cell(40, 7, "Total", border=0, align="R")
+                pdf.ln()
+                pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+                pdf.ln(2)
+
+                pdf.set_font("Helvetica", "", 9)
+                for v in ventas_dia:
+                    hora = str(v.get("creado_en", ""))[-8:] if v.get("creado_en") else "—"
+                    folio = f"#{str(v.get('id', ''))[:10]}"
+                    metodo = "Efectivo" if v.get("metodo_pago") == "efectivo" else "Tarjeta"
+                    total = f"${v.get('total', 0):.2f}"
+
+                    pdf.cell(30, 6, hora, border=0)
+                    pdf.cell(70, 6, folio, border=0)
+                    pdf.cell(40, 6, metodo, border=0)
+                    pdf.cell(40, 6, total, border=0, align="R")
+                    pdf.ln()
+
             pdf.ln(8)
             pdf.line(15, pdf.get_y(), 195, pdf.get_y())
             pdf.ln(6)
@@ -249,7 +347,7 @@ def caja_view(page: ft.Page):
         multiline=True, min_lines=2, max_lines=4,
         border_radius=8, expand=True
     )
-
+        
     def confirmar_corte(e):
         dialogo_corte.open = False
         page.update()
@@ -323,9 +421,11 @@ def caja_view(page: ft.Page):
             if obs:
                 datos_corte["observaciones"] = obs
 
+            ventas_dia = get_ventas(str(date.today()), str(date.today()))
+
             corte_id = crear_corte_caja(datos_corte)
             ruta_pdf = generar_pdf_corte(
-                corte_id, resumen, campo_obs.value.strip())
+                corte_id, resumen, campo_obs.value.strip(), ventas_dia)
 
             refrescar()
 
@@ -335,23 +435,60 @@ def caja_view(page: ft.Page):
                 dialogo_ok.open = False
                 page.update()
 
+            filas_desglose = []
+            for v in ventas_dia:
+                filas_desglose.append(
+                    ft.Row(
+                        controls=[
+                            ft.Text(f"#{str(v.get('id', ''))[:8]}", size=12,
+                                     color=COLOR_TEXTO, weight=ft.FontWeight.BOLD, width=70),
+                            ft.Container(
+                                content=ft.Text(
+                                    "💵" if v.get("metodo_pago") == "efectivo" else "💳",
+                                    size=11, color="white"),
+                                bgcolor=COLOR_NARANJA if v.get("metodo_pago") == "efectivo" else COLOR_MORADO,
+                                border_radius=14, padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                            ),
+                            ft.Text(f"${v.get('total', 0):.2f}", size=13, color=COLOR_TEXTO,
+                                     weight=ft.FontWeight.BOLD, expand=True, text_align=ft.TextAlign.RIGHT),
+                        ],
+                        spacing=8,
+                    )
+                )
+
+            if not filas_desglose:
+                filas_desglose = [ft.Text("Sin ventas registradas", color=COLOR_SUBTEXTO, italic=True, size=12)]
+
             dialogo_ok = ft.AlertDialog(
                 modal=True,
                 title=ft.Text("✅ Corte Realizado",
                               weight=ft.FontWeight.BOLD),
-                content=ft.Column(
-                    controls=[
-                        ft.Text(f"Corte guardado",
-                                size=14, color=COLOR_TEXTO),
-                        ft.Text(
-                            f"Total ingresos: ${resumen.get('total', 0):.2f}",
-                            size=13, color=COLOR_ACENTO,
-                            weight=ft.FontWeight.BOLD),
-                        ft.Text(
-                            f"Ventas: {resumen.get('total_ventas', 0)}",
-                            size=13, color=COLOR_SUBTEXTO),
-                    ],
-                    spacing=8, tight=True
+                content=ft.Container(
+                    width=380,
+                    content=ft.Column(
+                        controls=[
+                            ft.Text(f"Corte guardado",
+                                    size=14, color=COLOR_TEXTO),
+                            ft.Text(
+                                f"Total ingresos: ${resumen.get('total', 0):.2f}",
+                                size=13, color=COLOR_ACENTO,
+                                weight=ft.FontWeight.BOLD),
+                            ft.Text(
+                                f"Ventas: {resumen.get('total_ventas', 0)}",
+                                size=13, color=COLOR_SUBTEXTO),
+                            ft.Divider(),
+                            ft.Text("Desglose de ventas", size=13,
+                                    weight=ft.FontWeight.BOLD, color=COLOR_TEXTO),
+                            ft.Column(
+                                controls=filas_desglose,
+                                spacing=6,
+                                scroll=ft.ScrollMode.AUTO,
+                                height=min(260, 36 + 30 * max(len(filas_desglose), 1)),
+                            ),
+                        ],
+                        spacing=8, tight=True
+                    ),
+                    padding=ft.padding.only(top=4),
                 ),
                 actions=[
                     ft.TextButton(

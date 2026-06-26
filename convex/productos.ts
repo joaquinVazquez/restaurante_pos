@@ -1,85 +1,65 @@
-// convex/productos.ts
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
 export const listar = query({
-  args: {
-    busqueda:     v.optional(v.string()),
-    categoria_id: v.optional(v.string()),
+  args: { 
+    negocio_id: v.id("negocios"),
+    categoria_id: v.optional(v.id("categorias")),
+    busqueda: v.optional(v.string())
   },
   handler: async (ctx, args) => {
-    let productos = await ctx.db
+    // 1. Filtrar siempre por el tenant (negocio) activo
+    let q = ctx.db
       .query("productos")
-      .filter((q) => q.eq(q.field("activo"), true))
-      .collect();
+      .withIndex("by_negocio", (q) => q.eq("negocio_id", args.negocio_id));
+      
+    let productos = await q.collect();
 
+    // 2. Filtros secundarios en memoria
     if (args.categoria_id) {
-      productos = productos.filter(
-        (p) => p.categoria_id === args.categoria_id
-      );
+      productos = productos.filter(p => p.categoria_id === args.categoria_id);
     }
-
     if (args.busqueda) {
       const b = args.busqueda.toLowerCase();
-      productos = productos.filter((p) =>
-        p.nombre.toLowerCase().includes(b)
-      );
+      productos = productos.filter(p => p.nombre.toLowerCase().includes(b));
     }
-
-    return productos;
+    
+    return productos.filter(p => p.activo === true);
   },
 });
 
 export const crear = mutation({
   args: {
-    nombre:       v.string(),
-    descripcion:  v.optional(v.string()),
-    precio:       v.number(),
-    stock:        v.number(),
-    categoria_id: v.optional(v.string()),
-    imagen:       v.optional(v.string()),
+    negocio_id: v.id("negocios"),
+    nombre: v.string(),
+    descripcion: v.string(),
+    precio: v.number(),
+    stock: v.number(),
+    categoria_id: v.optional(v.id("categorias")),
+    imagen: v.optional(v.string())
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("productos", {
-      ...args,
-      activo: true,
-    });
-  },
+    return await ctx.db.insert("productos", { ...args, activo: true });
+  }
 });
 
 export const actualizar = mutation({
   args: {
-    id:           v.id("productos"),
-    nombre:       v.optional(v.string()),
-    descripcion:  v.optional(v.string()),
-    precio:       v.optional(v.number()),
-    stock:        v.optional(v.number()),
-    categoria_id: v.optional(v.string()),
-    imagen:       v.optional(v.string()),
+    negocio_id: v.id("negocios"),
+    id: v.id("productos"),
+    nombre: v.optional(v.string()),
+    descripcion: v.optional(v.string()),
+    precio: v.optional(v.number()),
+    stock: v.optional(v.number()),
+    categoria_id: v.optional(v.id("categorias")),
+    imagen: v.optional(v.string())
   },
   handler: async (ctx, args) => {
-    const { id, ...campos } = args;
-    return await ctx.db.patch(id, campos);
-  },
-});
-
-export const desactivar = mutation({
-  args: { id: v.id("productos") },
-  handler: async (ctx, args) => {
-    return await ctx.db.patch(args.id, { activo: false });
-  },
-});
-
-export const actualizar_stock = mutation({
-  args: {
-    id:       v.id("productos"),
-    cantidad: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const producto = await ctx.db.get(args.id);
-    if (!producto) throw new Error("Producto no encontrado");
-    return await ctx.db.patch(args.id, {
-      stock: producto.stock - args.cantidad,
-    });
-  },
+    const { id, negocio_id, ...updates } = args;
+    // Capa de seguridad: verificar que el producto pertenece al negocio
+    const producto = await ctx.db.get(id);
+    if (!producto || producto.negocio_id !== negocio_id) throw new Error("Acceso denegado");
+    
+    return await ctx.db.patch(id, updates);
+  }
 });

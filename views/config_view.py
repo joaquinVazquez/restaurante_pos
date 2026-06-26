@@ -46,7 +46,7 @@ def config_view(page: ft.Page, usuario_actual: dict = None):
     import shutil, os
     RUTA_LOGO = "assets/logo"
 
-    logo_actual = {"ruta": config.get("restaurante_logo", "")}
+    logo_actual = {"ruta": config.get("logo", "")}
 
     preview_logo = ft.Container(
         content=ft.Image(
@@ -83,33 +83,39 @@ def config_view(page: ft.Page, usuario_actual: dict = None):
     page.overlay.append(file_picker_logo)
     nombre    = ft.TextField(label="Nombre del restaurante",
                               value=config.get(
-                                  "restaurante_nombre", ""),
+                                  "nombre_restaurante", ""),
                               height=48)
     direccion = ft.TextField(label="Dirección",
                               value=config.get(
-                                  "restaurante_direccion", ""),
+                                  "direccion", ""),
                               multiline=True)
     telefono  = ft.TextField(label="Teléfono",
                               value=config.get(
-                                  "restaurante_telefono", ""),
+                                  "telefono", ""),
                               height=48)
     email     = ft.TextField(label="Email",
                               value=config.get(
-                                  "restaurante_email", ""),
+                                  "email", ""),
                               height=48)
     rfc       = ft.TextField(label="RFC",
                               value=config.get(
-                                  "restaurante_rfc", ""),
+                                  "rfc", ""),
                               height=48)
 
     def guardar_restaurante(e):
         guardar_configuracion({
-            "nombre":    nombre.value,
-            "direccion": direccion.value,
-            "telefono":  telefono.value,
-            "email":     email.value,
-            "rfc":       rfc.value,
+            "nombre_restaurante": nombre.value,
+            "direccion":          direccion.value,
+            "telefono":           telefono.value,
+            "email":              email.value,
+            "rfc":                rfc.value,
         })
+        # Recargar el valor en memoria para que persista en pantalla
+        config["nombre_restaurante"] = nombre.value
+        config["direccion"] = direccion.value
+        config["telefono"] = telefono.value
+        config["email"] = email.value
+        config["rfc"] = rfc.value
         snack("✅ Datos del restaurante guardados")
 
     restaurante_tab = card(

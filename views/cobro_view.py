@@ -2,7 +2,7 @@ import flet as ft
 import os
 from datetime import datetime
 # CAMBIO 1: Importamos actualizar_producto para controlar el inventario
-from database.db_manager import crear_venta, actualizar_producto
+from database.db_manager import crear_venta
 
 COLOR_TEXTO      = "#2c3e50"
 COLOR_SUBTEXTO   = "#7f8c8d"
@@ -13,7 +13,7 @@ COLOR_AZUL       = "#3498db"
 COLOR_NARANJA    = "#ff7a00"
 COLOR_FONDO      = "#f0f4f8"
 
-def cobro_view(page: ft.Page, carrito, on_venta_completada):
+def cobro_view(page: ft.Page, carrito, on_venta_completada, cliente_id=None, cliente_nombre="Sin cliente"):
 
     metodo_pago    = {"valor": "efectivo"}
     monto_recibido = {"valor": 0.0}
@@ -208,6 +208,8 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
                 "monto_recibido": monto_r,
                 "cambio":         cambio_r,
             }
+            if cliente_id:
+                datos["cliente_id"] = cliente_id
 
             items = [
                 {
@@ -221,11 +223,6 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
 
             # 2. Registrar venta
             venta_id = crear_venta(datos, items)
-
-            # CAMBIO 3: Deducir el stock de la base de datos
-            for pid, item in carrito.items.items():
-                nuevo_stock = item["stock"] - item["cantidad"]
-                actualizar_producto(pid, {"stock": nuevo_stock})
 
             # 3. Generar PDF
             ruta_pdf = generar_ticket_pdf(venta_id)
@@ -296,6 +293,7 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada):
                         content=ft.Column(
                             controls=[
                                 ft.Text("📋 Resumen", size=15, weight=ft.FontWeight.BOLD, color=COLOR_TEXTO),
+                                ft.Text(f"👤 {cliente_nombre}", size=12, color=COLOR_SUBTEXTO),
                                 ft.Divider(),
                                 ft.Column(controls=filas_orden, scroll=ft.ScrollMode.AUTO, expand=True, spacing=4),
                                 ft.Divider(),

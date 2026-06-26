@@ -4,11 +4,17 @@ import { v } from "convex/values";
 
 export const listar = query({
   args: {
+    negocio_id: v.id("negocios"),
     desde: v.optional(v.string()),
     hasta: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let gastos = await ctx.db.query("gastos").order("desc").collect();
+    let gastos = await ctx.db
+      .query("gastos")
+      .withIndex("by_negocio", (q) => q.eq("negocio_id", args.negocio_id))
+      .order("desc")
+      .collect();
+
     if (args.desde && args.hasta) {
       gastos = gastos.filter(
         (g) => g.fecha >= args.desde! && g.fecha <= args.hasta!
@@ -20,6 +26,7 @@ export const listar = query({
 
 export const crear = mutation({
   args: {
+    negocio_id:  v.id("negocios"),
     categoria:   v.string(),
     descripcion: v.string(),
     monto:       v.number(),

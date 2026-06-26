@@ -7,13 +7,14 @@ COLOR_TEXTO  = "#ffffff"
 COLOR_MUTED  = "#a0aec0"
 
 ITEMS = {
-    "inicio":    ("🏠", "Inicio"),
-    "ventas":    ("💰", "Ventas"),
-    "productos": ("📦", "Productos"),
-    "reportes":  ("📊", "Reportes"),
-    "caja":      ("🏧", "Caja"),
-    "clientes":  ("👥", "Clientes"),
-    "config":    ("⚙️", "Config"),
+    "inicio":     ("🏠", "Inicio"),
+    "ventas":     ("💰", "Ventas"),
+    "productos":  ("📦", "Productos"),
+    "inventario": ("📥", "Inventario"),
+    "reportes":   ("📊", "Reportes"),
+    "caja":       ("🏧", "Caja"),
+    "clientes":   ("👥", "Clientes"),
+    "config":     ("⚙️", "Config"),
 }
 
 

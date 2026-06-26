@@ -1,0 +1,14 @@
+[tool.flet]
+app_name = "RestaurantePOS"
+app_version = "1.0.0"
+app_description = "Sistema de Punto de Venta"
+org = "scarlyCode"
+
+[tool.flet.app]
+module = "main"
+
+[tool.flet.assets]
+paths = [".env"]
+
+[tool.flet.requirements]
+path = "requirements.txt"

@@ -1,12 +1,12 @@
-// convex/categorias.ts
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
 export const listar = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { negocio_id: v.id("negocios") },
+  handler: async (ctx, args) => {
     return await ctx.db
       .query("categorias")
+      .withIndex("by_negocio", (q) => q.eq("negocio_id", args.negocio_id))
       .filter((q) => q.eq(q.field("activo"), true))
       .collect();
   },
@@ -14,33 +14,16 @@ export const listar = query({
 
 export const crear = mutation({
   args: {
+    negocio_id: v.id("negocios"),
     nombre: v.string(),
-    icono:  v.optional(v.string()),
+    icono: v.optional(v.string())
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("categorias", {
+      negocio_id: args.negocio_id,
       nombre: args.nombre,
-      icono:  args.icono,
-      activo: true,
+      icono: args.icono,
+      activo: true
     });
-  },
-});
-
-export const actualizar = mutation({
-  args: {
-    id: v.id("categorias"),
-    nombre: v.optional(v.string()),
-    icono: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const { id, ...campos } = args;
-    return await ctx.db.patch(id, campos);
-  },
-});
-
-export const eliminar = mutation({
-  args: { id: v.id("categorias") },
-  handler: async (ctx, args) => {
-    return await ctx.db.patch(args.id, { activo: false });
-  },
+  }
 });

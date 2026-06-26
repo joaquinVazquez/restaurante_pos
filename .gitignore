@@ -31,3 +31,52 @@ build/
 .env.local
 
 node_modules
+
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Variables de entorno (NUNCA al repo)
+.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+.Python
+
+# Build de Flet
+build/
+dist/
+
+# PyInstaller
+*.spec
+
+# Logs
+*.log
+logs/
+
+# Base de datos local
+*.db
+*.sqlite3
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Windows
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# Archivos temporales
+*.tmp
+*.temp
+~$*

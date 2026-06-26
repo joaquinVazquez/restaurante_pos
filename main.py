@@ -1,4 +1,11 @@
 # main.py
+import sys, os, site
+
+venv_site_packages = site.getsitepackages()[0]
+if venv_site_packages in sys.path:
+    sys.path.remove(venv_site_packages)
+sys.path.insert(0, venv_site_packages)
+
 import flet as ft
 from database.db_manager import verificar_conexion
 from controllers.auth_controller import (
@@ -10,14 +17,13 @@ from views.bottom_nav import bottom_nav
 from views.ventas_view import ventas_view
 from views.inicio_view import inicio_view
 from views.productos_view import productos_view
+from views.inventario_view import inventario_view
 from views.reportes_view import reportes_view
 from views.caja_view import caja_view
 from views.clientes_view import clientes_view
 
 
-import sys
-import os
-import site
+
 
 # 1. Obtener la ruta de los paquetes instalados en el entorno virtual
 venv_site_packages = site.getsitepackages()[0]
@@ -38,13 +44,14 @@ BOTTOM_NAV_H     = 72
 verificar_conexion()
 
 NAV_ITEMS = {
-    "inicio":    ("🏠", "Inicio"),
-    "ventas":    ("💰", "Ventas"),
-    "productos": ("📦", "Productos"),
-    "reportes":  ("📊", "Reportes"),
-    "caja":      ("🏧", "Caja"),
-    "clientes":  ("👥", "Clientes"),
-    "config":    ("⚙️", "Config"),
+    "inicio":     ("🏠", "Inicio"),
+    "ventas":     ("💰", "Ventas"),
+    "productos":  ("📦", "Productos"),
+    "inventario": ("📥", "Inventario"),
+    "reportes":   ("📊", "Reportes"),
+    "caja":       ("🏧", "Caja"),
+    "clientes":   ("👥", "Clientes"),
+    "config":     ("⚙️", "Config"),
 }
 
 
@@ -143,6 +150,8 @@ def main(page: ft.Page):
             contenido = ventas_view(page)
         elif modulo == "productos":
             contenido = productos_view(page)
+        elif modulo == "inventario":
+            contenido = inventario_view(page)
         elif modulo == "reportes":
             try:
                 contenido = reportes_view(page)

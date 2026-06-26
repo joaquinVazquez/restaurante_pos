@@ -1,6 +1,7 @@
 # views/ventas_view.py
 import flet as ft
 from controllers.ventas_controller import obtener_categorias, obtener_productos, Carrito
+from database.db_manager import get_clientes
 
 COLOR_ACENTO     = "#ff7a00"
 COLOR_EXITO      = "#00b894"
@@ -80,6 +81,33 @@ def ventas_view(page: ft.Page):
     lbl_total = ft.Text("$0.00", size=22,
                         weight=ft.FontWeight.BOLD, color=COLOR_ACENTO)
     lbl_items = ft.Text("0 items", size=11, color=COLOR_SUBTEXTO)
+
+    cliente_seleccionado = {"id": None, "nombre": "Sin cliente"}
+
+    opciones_clientes = [
+        ft.dropdown.Option(key="", text="Sin cliente (venta general)")
+    ] + [
+        ft.dropdown.Option(key=c["id"], text=c["nombre"])
+        for c in get_clientes()
+    ]
+
+    def cambiar_cliente(e):
+        valor = dd_cliente.value
+        if valor:
+            cliente = next((c for c in get_clientes() if c["id"] == valor), None)
+            cliente_seleccionado["id"] = valor
+            cliente_seleccionado["nombre"] = cliente["nombre"] if cliente else "Cliente"
+        else:
+            cliente_seleccionado["id"] = None
+            cliente_seleccionado["nombre"] = "Sin cliente"
+
+    dd_cliente = ft.Dropdown(
+        label="Cliente",
+        hint_text="Sin cliente (venta general)",
+        options=opciones_clientes,
+        on_change=cambiar_cliente,
+        height=48,
+    )
 
     def refrescar_grid(prods):
         grid.controls.clear()
@@ -212,6 +240,8 @@ def ventas_view(page: ft.Page):
         area = page.controls[0].controls[1]
         area.content = cobro_view(
             page, carrito,
+            cliente_id=cliente_seleccionado["id"],
+            cliente_nombre=cliente_seleccionado["nombre"],
             on_venta_completada=lambda: recargar_ventas()
         )
         page.update()
@@ -263,6 +293,7 @@ def ventas_view(page: ft.Page):
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                 ),
                 ft.Divider(),
+                dd_cliente,
                 lista,
                 ft.Divider(),
                 ft.Row(

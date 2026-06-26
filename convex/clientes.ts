@@ -1,95 +1,73 @@
-// convex/clientes.ts
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
 export const listar = query({
-  args: {
-    busqueda: v.optional(v.string()),
+  args: { 
+    negocio_id: v.id("negocios"),
+    busqueda: v.optional(v.string())
   },
   handler: async (ctx, args) => {
     let clientes = await ctx.db
       .query("clientes")
-      .filter((q) => q.eq(q.field("activo"), true))
+      .withIndex("by_negocio", (q) => q.eq("negocio_id", args.negocio_id))
       .collect();
 
+    // Filtro de búsqueda en memoria
     if (args.busqueda) {
       const b = args.busqueda.toLowerCase();
-      clientes = clientes.filter((c) =>
-        c.nombre.toLowerCase().includes(b) ||
-        (c.telefono || "").toLowerCase().includes(b) ||
-        (c.email || "").toLowerCase().includes(b)
-      );
+      clientes = clientes.filter(c => c.nombre.toLowerCase().includes(b));
     }
-
+    
     return clientes;
   },
 });
 
 export const crear = mutation({
   args: {
+    negocio_id: v.id("negocios"),
     nombre: v.string(),
     telefono: v.optional(v.string()),
-    email: v.optional(v.string()),
-    direccion: v.optional(v.string()),
-    notas: v.optional(v.string()),
+    email: v.optional(v.string())
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("clientes", {
-      ...args,
-      activo: true,
-    });
-  },
+    return await ctx.db.insert("clientes", args);
+  }
 });
 
 export const actualizar = mutation({
   args: {
+    negocio_id: v.id("negocios"),
     id: v.id("clientes"),
     nombre: v.optional(v.string()),
     telefono: v.optional(v.string()),
-    email: v.optional(v.string()),
-    direccion: v.optional(v.string()),
-    notas: v.optional(v.string()),
+    email: v.optional(v.string())
   },
   handler: async (ctx, args) => {
-    const { id, ...campos } = args;
-    return await ctx.db.patch(id, campos);
-  },
-});
-
-export const desactivar = mutation({
-  args: { id: v.id("clientes") },
-  handler: async (ctx, args) => {
-    return await ctx.db.patch(args.id, { activo: false });
-  },
-});
-
-export const historial = query({
-  args: {
-    cliente_id: v.id("clientes"),
-  },
-  handler: async (ctx, args) => {
-    const ventas = await ctx.db
-      .query("ventas")
-      .filter((q) => q.eq(q.field("cliente_id"), args.cliente_id))
-      .order("desc")
-      .collect();
-
-    const salida = [];
-    for (const venta of ventas) {
-      const detalles = await ctx.db
-        .query("detalle_ventas")
-        .filter((q) => q.eq(q.field("venta_id"), venta._id))
-        .collect();
-
-      salida.push({
-        id: venta._id,
-        creado_en: new Date(venta._creationTime).toISOString(),
-        total: venta.total,
-        metodo_pago: venta.metodo_pago,
-        productos: detalles.length,
-      });
+    const { id, negocio_id, ...updates } = args;
+    
+    // Capa de seguridad: verificar que el cliente pertenece al negocio activo
+    const cliente = await ctx.db.get(id);
+    if (!cliente || cliente.negocio_id !== negocio_id) {
+        throw new Error("Acceso denegado");
     }
+    
+    return await ctx.db.patch(id, updates);
+  }
+});
 
-    return salida;
+export const eliminar = mutation({
+  args: {
+    negocio_id: v.id("negocios"),
+    id: v.id("clientes")
   },
+  handler: async (ctx, args) => {
+    // Capa de seguridad: verificar propiedad antes de eliminar
+    const cliente = await ctx.db.get(args.id);
+    if (!cliente || cliente.negocio_id !== args.negocio_id) {
+        throw new Error("Acceso denegado: El cliente no pertenece a este negocio.");
+    }
+    
+    // Eliminación física
+    await ctx.db.delete(args.id);
+  }
 });

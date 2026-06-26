@@ -180,7 +180,11 @@ def productos_view(page: ft.Page):
     # ── Campos del diálogo ─────────────────────────────────
     campo_nombre   = ft.TextField(label="Nombre del producto",
                                    border_radius=8, expand=True)
-    campo_precio   = ft.TextField(label="Precio", prefix_text="$",
+    campo_precio   = ft.TextField(label="Precio de venta", prefix_text="$",
+                                   border_radius=8, width=150,
+                                   keyboard_type=ft.KeyboardType.NUMBER)
+    campo_costo    = ft.TextField(label="Costo", prefix_text="$",
+                                   hint_text="Lo que te cuesta a ti",
                                    border_radius=8, width=150,
                                    keyboard_type=ft.KeyboardType.NUMBER)
     campo_stock    = ft.TextField(label="Stock",
@@ -209,8 +213,8 @@ def productos_view(page: ft.Page):
                 scroll=ft.ScrollMode.AUTO,
                 controls=[
                     ft.Row(controls=[campo_nombre]),
-                    ft.Row(controls=[campo_precio, campo_stock], spacing=12),
-                    ft.Row(controls=[dd_categoria]),
+                    ft.Row(controls=[campo_precio, campo_costo], spacing=12),
+                    ft.Row(controls=[campo_stock, dd_categoria], spacing=12),
                     ft.Row(controls=[campo_desc]),
                     ft.Divider(),
                     ft.Text("Imagen del producto", size=13,
@@ -237,7 +241,7 @@ def productos_view(page: ft.Page):
                 tight=True
             ),
             width=460,
-            height=430,
+            height=470,
             padding=10
         ),
         actions=[
@@ -259,6 +263,7 @@ def productos_view(page: ft.Page):
         imagen_seleccionada["ruta"] = None
         campo_nombre.value  = ""
         campo_precio.value  = ""
+        campo_costo.value   = ""
         campo_stock.value   = ""
         campo_desc.value    = ""
         dd_categoria.value  = None
@@ -276,6 +281,7 @@ def productos_view(page: ft.Page):
         imagen_seleccionada["ruta"] = prod["imagen"]
         campo_nombre.value  = prod["nombre"]
         campo_precio.value  = str(prod["precio"])
+        campo_costo.value   = str(prod.get("costo", 0) or "")
         campo_stock.value   = str(prod["stock"])
         campo_desc.value    = ""
         dd_categoria.value  = None
@@ -295,6 +301,7 @@ def productos_view(page: ft.Page):
         dialogo.open = True
         page.update()
 
+
     def cerrar_dialogo():
         dialogo.open = False
         page.update()
@@ -302,6 +309,7 @@ def productos_view(page: ft.Page):
     def guardar_producto():
         nombre = campo_nombre.value.strip()
         precio = campo_precio.value.strip()
+        costo  = campo_costo.value.strip()
         stock  = campo_stock.value.strip()
 
         if not nombre or not precio or not stock:
@@ -317,6 +325,7 @@ def productos_view(page: ft.Page):
 
         try:
             precio_f = float(precio)
+            costo_f  = float(costo) if costo else 0.0
             stock_i  = int(stock)
             cat_id   = str(dd_categoria.value) if dd_categoria.value else None
             imagen   = imagen_seleccionada["ruta"]
@@ -325,6 +334,7 @@ def productos_view(page: ft.Page):
                 actualizar_producto(producto_editando["id"], {
                     "nombre": nombre,
                     "precio": precio_f,
+                    "costo": costo_f,
                     "stock": stock_i,
                     "categoria_id": cat_id,
                     "imagen": imagen,
@@ -334,6 +344,7 @@ def productos_view(page: ft.Page):
                 crear_producto({
                     "nombre": nombre,
                     "precio": precio_f,
+                    "costo": costo_f,
                     "stock": stock_i,
                     "categoria_id": cat_id,
                     "imagen": imagen,

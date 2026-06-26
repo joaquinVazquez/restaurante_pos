@@ -3,9 +3,6 @@ from dotenv import load_dotenv
 from convex import ConvexClient
 from datetime import date, datetime
 
-# SE ELIMINÓ LA IMPORTACIÓN DE convex_client PORQUE ES REDUNDANTE Y ENMASCARA ERRORES
-# from database.convex_client import convex_mutation, convex_query
-
 # 1. Cargar el .env explícitamente
 load_dotenv()
 
@@ -18,28 +15,44 @@ if not CONVEX_URL:
 # 3. Instanciar el cliente
 client = ConvexClient(CONVEX_URL)
 
+# ══════════════════ GESTIÓN DE SESIÓN (MULTI-TENANT) ══════════════════
+SESION_ACTUAL = {
+    "negocio_id": None,
+    "usuario": None
+}
+
+def set_sesion(negocio_id: str, usuario: dict):
+    SESION_ACTUAL["negocio_id"] = negocio_id
+    SESION_ACTUAL["usuario"] = usuario
+
+def cerrar_sesion():
+    SESION_ACTUAL["negocio_id"] = None
+    SESION_ACTUAL["usuario"] = None
+
+def _inyectar_tenant(args: dict | None) -> dict:
+    """Interceptor: Añade el negocio_id a todas las peticiones a Convex"""
+    if args is None:
+        args = {}
+    if SESION_ACTUAL["negocio_id"]:
+        args["negocio_id"] = SESION_ACTUAL["negocio_id"]
+    return args
+# ══════════════════════════════════════════════════════════════════════
 
 def _required_query(path: str, args: dict | None = None):
+    args_tenant = _inyectar_tenant(args)
     try:
-        # Se ejecuta directamente sobre el cliente local validado
-        result = client.query(path, args)
-        return result
+        return client.query(path, args_tenant)
     except Exception as e:
-        # Trazabilidad estricta sin Exception Swallowing
         print(f"\n[DEBUG] Falla nativa Convex (Query '{path}'): {type(e).__name__} - {str(e)}\n")
         raise ConnectionError(f"No se pudo consultar Convex: {path}")
 
-
 def _required_mutation(path: str, args: dict | None = None):
+    args_tenant = _inyectar_tenant(args)
     try:
-        # Se ejecuta directamente sobre el cliente local validado
-        result = client.mutation(path, args)
-        return result
+        return client.mutation(path, args_tenant)
     except Exception as e:
-        # Trazabilidad estricta sin Exception Swallowing
         print(f"\n[DEBUG] Falla nativa Convex (Mutation '{path}'): {type(e).__name__} - {str(e)}\n")
         raise ConnectionError(f"No se pudo ejecutar Convex: {path}")
-
 
 def _creation_date(item: dict) -> str:
     created = item.get("_creationTime")
@@ -47,24 +60,49 @@ def _creation_date(item: dict) -> str:
         return item.get("fecha") or date.today().isoformat()
     return datetime.fromtimestamp(created / 1000).date().isoformat()
 
-
 def verificar_conexion():
-    _required_query("usuarios:listar")
+    # Solo verificamos que el cliente responda, sin requerir negocio_id
     print("Modo: Convex")
     return True
-
 
 def usando_convex() -> bool:
     return True
 
-
+# ── LOGIN ──
 def login_usuario(username: str, password: str):
-    return _required_query("usuarios:login", {
-        "username": username,
-        "password": password,
-    })
+    # Usamos client.query directamente para evitar el interceptor de tenant
+    # porque en el login AÚN NO tenemos un negocio_id.
+    try:
+        res = client.query("usuarios:login", {
+            "username": username,
+            "password": password,
+        })
+        if res and res.get("negocio_id"):
+            set_sesion(res["negocio_id"], res)
+        return res
+    except Exception as e:
+        print(f"Error en login: {e}")
+        return None
 
+def registrar_cuenta(nombre_negocio: str, nombre_usuario: str, username: str, password: str):
+    try:
+        res = client.mutation("usuarios:registrar_cuenta", {
+            "nombre_negocio": nombre_negocio,
+            "nombre_usuario": nombre_usuario,
+            "username": username,
+            "password": password
+        })
+        if res and res.get("negocio_id"):
+            set_sesion(res["negocio_id"], res) # Auto-login inmediato
+        return True, res
+    except Exception as e:
+        # Extraemos el mensaje de error de Convex de forma limpia
+        error_str = str(e)
+        if "El nombre de usuario ya está registrado" in error_str:
+            return False, "⚠️ El nombre de usuario ya existe."
+        return False, "❌ Error al crear la cuenta. Intente de nuevo."
 
+# ── NORMALIZADORES ──
 def _normalizar_categoria(c: dict) -> dict:
     return {
         "id": c.get("_id") or c.get("id"),
@@ -72,7 +110,6 @@ def _normalizar_categoria(c: dict) -> dict:
         "icono": c.get("icono", ""),
         "activo": c.get("activo", True),
     }
-
 
 def _normalizar_producto(p: dict) -> dict:
     return {
@@ -89,7 +126,6 @@ def _normalizar_producto(p: dict) -> dict:
         "imagen": p.get("imagen"),
     }
 
-
 def _normalizar_venta(v: dict) -> dict:
     return {
         "id": v.get("_id") or v.get("id"),
@@ -100,27 +136,9 @@ def _normalizar_venta(v: dict) -> dict:
         "cliente_id": v.get("cliente_id"),
     }
 
-
-def get_resumen_dia() -> dict:
-    resumen = _required_query("ventas:resumen_dia") or {}
-    productos = get_productos(include_sin_stock=True)
-    return {
-        "total_ventas": resumen.get("total_ventas", 0),
-        "total": resumen.get("total", 0),
-        "efectivo": resumen.get("efectivo", 0),
-        "tarjeta": resumen.get("tarjeta", 0),
-        "productos_activos": len([p for p in productos if p.get("activo", True)]),
-        "stock_bajo": len([
-            p for p in productos
-            if p.get("activo", True) and int(p.get("stock", 0)) <= 5
-        ]),
-    }
-
-
+# ── CATÁLOGO E INVENTARIO ──
 def get_categorias():
-    return [_normalizar_categoria(c)
-            for c in (_required_query("categorias:listar") or [])]
-
+    return [_normalizar_categoria(c) for c in (_required_query("categorias:listar") or [])]
 
 def get_productos(busqueda=None, categoria_id=None, include_sin_stock=False):
     args = {}
@@ -140,40 +158,34 @@ def get_productos(busqueda=None, categoria_id=None, include_sin_stock=False):
             productos.append(producto)
     return productos
 
-
 def crear_producto(datos: dict):
-    # 1. Definir los campos obligatorios
     payload = {
         "nombre": datos.get("nombre"),
         "descripcion": datos.get("descripcion") or "",
         "precio": float(datos.get("precio", 0)),
         "stock": int(datos.get("stock", 0)),
     }
-    
-    # 2. Inyectar campos opcionales únicamente si tienen un valor válido
     if datos.get("categoria_id"):
         payload["categoria_id"] = datos["categoria_id"]
-        
     if datos.get("imagen"):
         payload["imagen"] = datos["imagen"]
-        
     return _required_mutation("productos:crear", payload)
-
 
 def actualizar_producto(producto_id, datos: dict):
     payload = {"id": producto_id}
-    for key in ("nombre", "descripcion", "categoria_id", "imagen"):
-        if key in datos:
-            payload[key] = datos.get(key) or None
+    # Añadimos "activo" a la lista de llaves permitidas
+    for key in ("nombre", "descripcion", "categoria_id", "imagen", "activo"):
+        if key in datos and datos.get(key) is not None:
+            payload[key] = datos.get(key)
     if "precio" in datos:
         payload["precio"] = float(datos["precio"])
     if "stock" in datos:
         payload["stock"] = int(datos["stock"])
     return _required_mutation("productos:actualizar", payload)
 
-
-def desactivar_producto(producto_id):
-    return _required_mutation("productos:desactivar", {"id": producto_id})
+def desactivar_producto(producto_id: str):
+    """Realiza un borrado lógico ocultando el producto del catálogo"""
+    return actualizar_producto(producto_id, {"activo": False})
 
 
 def actualizar_stock(producto_id, cantidad):
@@ -182,195 +194,52 @@ def actualizar_stock(producto_id, cantidad):
         "cantidad": float(cantidad),
     })
 
+def crear_categoria(datos: dict):
+    payload = {"nombre": datos["nombre"]}
+    if datos.get("icono"):
+        payload["icono"] = datos["icono"]
+    return _required_mutation("categorias:crear", payload)
 
+# ── VENTAS Y REPORTES ──
 def crear_venta(datos: dict, items: list):
     return _required_mutation("ventas:crear", {**datos, "items": items})
 
-
 def get_ventas(desde=None, hasta=None):
     args = {}
-    if desde:
-        args["desde"] = str(desde)
-    if hasta:
-        args["hasta"] = str(hasta)
+    if desde: args["desde"] = str(desde)
+    if hasta: args["hasta"] = str(hasta)
     return [_normalizar_venta(v) for v in (_required_query("ventas:listar", args) or [])]
 
-
-def get_clientes(busqueda=""):
-    clientes = _required_query("clientes:listar", {"busqueda": busqueda or ""}) or []
-    ventas = get_ventas()
-    salida = []
-    for c in clientes:
-        cid = c.get("_id")
-        compras = [v for v in ventas if v.get("cliente_id") == cid]
-        salida.append({
-            "id": cid,
-            "nombre": c.get("nombre", ""),
-            "telefono": c.get("telefono"),
-            "email": c.get("email"),
-            "direccion": c.get("direccion"),
-            "notas": c.get("notas"),
-            "activo": c.get("activo", True),
-            "total_compras": len(compras),
-            "total_gastado": sum(v.get("total", 0) for v in compras),
-        })
-    return salida
-
-
-def crear_cliente(datos: dict):
-    return _required_mutation("clientes:crear", datos)
-
-
-def actualizar_cliente(cliente_id, datos: dict):
-    return _required_mutation("clientes:actualizar", {"id": cliente_id, **datos})
-
-
-def desactivar_cliente(cliente_id):
-    return _required_mutation("clientes:desactivar", {"id": cliente_id})
-
-
-def get_historial_cliente(cliente_id):
-    return _required_query("clientes:historial", {"cliente_id": cliente_id}) or []
-
-
-def get_configuracion() -> dict:
-    items = _required_query("configuracion:listar") or []
-    return {i["clave"]: i.get("valor", "") for i in items}
-
-
-def guardar_configuracion(datos: dict):
-    claves = {
-        "nombre": "restaurante_nombre",
-        "direccion": "restaurante_direccion",
-        "telefono": "restaurante_telefono",
-        "email": "restaurante_email",
-        "rfc": "restaurante_rfc",
-        "logo": "restaurante_logo",
-    }
-    for campo, clave in claves.items():
-        if campo in datos:
-            _required_mutation("configuracion:guardar", {
-                "clave": clave,
-                "valor": datos.get(campo, ""),
-            })
-
-
-def get_config_impresora() -> dict:
-    config = get_configuracion()
+def get_resumen_dia() -> dict:
+    resumen = _required_query("ventas:resumen_dia") or {}
+    productos = get_productos(include_sin_stock=True)
     return {
-        "nombre_impresora": config.get("impresora_nombre", ""),
-        "ancho_papel": config.get("impresora_ancho", "80"),
-        "mensaje_ticket": config.get("ticket_mensaje", "Gracias por su compra!"),
+        "total_ventas": resumen.get("total_ventas", 0),
+        "total": resumen.get("total", 0),
+        "efectivo": resumen.get("efectivo", 0),
+        "tarjeta": resumen.get("tarjeta", 0),
+        "productos_activos": len([p for p in productos if p.get("activo", True)]),
+        "stock_bajo": len([p for p in productos if p.get("activo", True) and int(p.get("stock", 0)) <= 5]),
     }
-
-
-def guardar_config_impresora(datos: dict):
-    claves = {
-        "nombre_impresora": "impresora_nombre",
-        "ancho_papel": "impresora_ancho",
-        "mensaje_ticket": "ticket_mensaje",
-    }
-    for campo, clave in claves.items():
-        _required_mutation("configuracion:guardar", {
-            "clave": clave,
-            "valor": datos.get(campo, ""),
-        })
-
-
-def get_usuarios():
-    return [{
-        "id": u.get("_id"),
-        "nombre": u.get("nombre"),
-        "username": u.get("username"),
-        "rol": u.get("rol"),
-        "activo": u.get("activo", True),
-    } for u in (_required_query("usuarios:listar") or [])]
-
-
-def crear_usuario(datos: dict):
-    return _required_mutation("usuarios:crear", {
-        "nombre": datos["nombre"],
-        "username": datos["username"],
-        "password_hash": datos["password"],
-        "rol": datos.get("rol", "cajero"),
-    })
-
-
-def cambiar_password_usuario(usuario_id, password: str):
-    return _required_mutation("usuarios:cambiar_password", {
-        "id": usuario_id,
-        "password_hash": password,
-    })
-
-
-def toggle_usuario_activo(usuario_id, activo: bool):
-    return _required_mutation("usuarios:toggle_activo", {
-        "id": usuario_id,
-        "activo": activo,
-    })
-
-
-def crear_categoria(datos: dict):
-    # Validamos que el nombre exista
-    if not datos.get("nombre"):
-        raise ValueError("El nombre de la categoría es obligatorio")
-        
-    payload = {"nombre": datos["nombre"]}
-    
-    # Enviamos el icono solo si tiene contenido
-    if datos.get("icono"):
-        payload["icono"] = datos["icono"]
-        
-    return _required_mutation("categorias:crear", payload)
-
-
-def actualizar_categoria(categoria_id, datos: dict):
-    # Construimos el payload dinámicamente para enviar solo lo que cambia
-    payload = {"id": categoria_id}
-    
-    # Solo agregamos campos si están presentes en 'datos' y tienen valor
-    if "nombre" in datos and datos["nombre"]:
-        payload["nombre"] = datos["nombre"]
-    
-    if "icono" in datos and datos["icono"]:
-        payload["icono"] = datos["icono"]
-        
-    # Si no hay nada que actualizar, no hacemos la llamada
-    if len(payload) == 1: # Solo el ID está presente
-        print("Advertencia: No hay datos para actualizar")
-        return None
-        
-    return _required_mutation("categorias:actualizar", payload)
-
-
-def eliminar_categoria(categoria_id):
-    prods = get_productos(categoria_id=categoria_id, include_sin_stock=True)
-    if prods:
-        raise Exception("No se puede eliminar: tiene productos activos")
-    return _required_mutation("categorias:eliminar", {"id": categoria_id})
-
 
 def get_reporte_ventas(desde: str, hasta: str) -> dict:
     ventas = get_ventas(desde, hasta)
     total = sum(v.get("total", 0) for v in ventas)
-    efectivo = sum(v.get("total", 0) for v in ventas
-                   if v.get("metodo_pago") == "efectivo")
-    tarjeta = sum(v.get("total", 0) for v in ventas
-                  if v.get("metodo_pago") == "tarjeta")
-    return {
-        "ingresos": total,
-        "cantidad_ventas": len(ventas),
-        "efectivo": efectivo,
-        "tarjeta": tarjeta,
-    }
-
+    efectivo = sum(v.get("total", 0) for v in ventas if v.get("metodo_pago") == "efectivo")
+    tarjeta = sum(v.get("total", 0) for v in ventas if v.get("metodo_pago") == "tarjeta")
+    return {"ingresos": total, "cantidad_ventas": len(ventas), "efectivo": efectivo, "tarjeta": tarjeta}
 
 def get_reporte_margen(desde: str, hasta: str) -> dict:
     ventas = _required_query("ventas:listar", {"desde": desde, "hasta": hasta}) or []
     ingresos = sum(v.get("total", 0) for v in ventas)
     gastos = sum(g.get("monto", 0) for g in get_gastos(desde, hasta))
     merma = sum(m.get("costo_total", 0) for m in get_mermas(desde, hasta))
-    costo_productos = 0
+
+    venta_ids = [v["id"] for v in ventas if v.get("id")]
+    costo_productos = _required_query(
+        "detalle_ventas:costo_total_periodo", {"venta_ids": venta_ids}
+    ) if venta_ids else 0
+
     ganancia_neta = ingresos - costo_productos - gastos - merma
     margen_pct = (ganancia_neta / ingresos * 100) if ingresos else 0
     return {
@@ -382,66 +251,197 @@ def get_reporte_margen(desde: str, hasta: str) -> dict:
         "margen_pct": margen_pct,
     }
 
-
+# ── GASTOS, MERMAS Y CAJA ──
 def get_gastos(desde: str, hasta: str):
     return _required_query("gastos:listar", {"desde": desde, "hasta": hasta}) or []
 
-
 def crear_gasto(datos: dict):
     return _required_mutation("gastos:crear", {
-        "categoria": datos["categoria"],
-        "descripcion": datos["descripcion"],
-        "monto": float(datos["monto"]),
-        "fecha": datos["fecha"],
+        "categoria": datos["categoria"], "descripcion": datos["descripcion"],
+        "monto": float(datos["monto"]), "fecha": datos["fecha"]
     })
-
 
 def get_mermas(desde: str, hasta: str):
     return _required_query("mermas:listar", {"desde": desde, "hasta": hasta}) or []
 
-
 def crear_merma(datos: dict):
     return _required_mutation("mermas:crear", {
-        "producto_id": datos["producto_id"],
-        "cantidad": float(datos["cantidad"]),
-        "motivo": datos["motivo"],
-        "fecha": datos["fecha"],
+        "producto_id": datos["producto_id"], "cantidad": float(datos["cantidad"]),
+        "motivo": datos["motivo"], "fecha": datos["fecha"]
     })
 
+def get_cortes_caja(desde: str | None = None, hasta: str | None = None):
+    args = {}
+    if desde: args["desde"] = str(desde)
+    if hasta: args["hasta"] = str(hasta)
+    cortes = _required_query("cortes_caja:listar", args) or []
+    return [{"id": c.get("_id") or c.get("id"), **c} for c in cortes]
+
+def crear_corte_caja(datos: dict):
+    payload = {
+        "fecha": datos.get("fecha", str(date.today())),
+        "fondo_inicial": float(datos.get("fondo_inicial", 0)),
+        "total_ventas": float(datos.get("total_ventas", 0)),
+        "total_ingresos": float(datos.get("total_ingresos", 0)),
+        "diferencia": float(datos.get("diferencia", 0)),
+    }
+    if "observaciones" in datos and datos["observaciones"]:
+        payload["observaciones"] = datos["observaciones"]
+        
+    return _required_mutation("cortes_caja:crear", payload)
 
 def get_comparativa(periodo: str):
     ventas = get_ventas()
     totales = {}
     for venta in ventas:
         fecha = venta["creado_en"]
-        if periodo == "semanal":
-            grupo = str(datetime.fromisoformat(fecha).weekday())
-        elif periodo == "mensual":
-            grupo = fecha[-2:]
-        else:
-            grupo = fecha[5:7]
+        grupo = str(datetime.fromisoformat(fecha).weekday()) if periodo == "semanal" else (fecha[-2:] if periodo == "mensual" else fecha[5:7])
         totales[grupo] = totales.get(grupo, 0) + venta.get("total", 0)
     return [{"grupo": k, "total": v} for k, v in sorted(totales.items())]
 
-
-def get_caja_hoy():
-    resumen = get_resumen_dia()
-    return [{
-        "total_ventas": resumen["total_ventas"],
-        "total_ingresos": resumen["total"],
-        "efectivo": resumen["efectivo"],
-        "tarjeta": resumen["tarjeta"],
-    }]
-
-
-def crear_corte_caja(datos: dict):
-    return _required_mutation("cortes_caja:crear", datos)
-
-
-def get_cortes_caja(desde: str | None = None, hasta: str | None = None):
+# ── GESTIÓN DE CLIENTES ──
+def get_clientes(busqueda=None):
     args = {}
-    if desde:
-        args["desde"] = str(desde)
-    if hasta:
-        args["hasta"] = str(hasta)
-    return _required_query("cortes_caja:listar", args) or []
+    if busqueda:
+        args["busqueda"] = busqueda
+    
+    clientes = _required_query("clientes:listar", args) or []
+    # Normalización básica para estandarizar el ID en Flet
+    return [{"id": c.get("_id") or c.get("id"), **c} for c in clientes]
+
+def crear_cliente(datos: dict):
+    payload = {
+        "nombre": datos["nombre"],
+    }
+    if datos.get("telefono"): payload["telefono"] = datos["telefono"]
+    if datos.get("email"): payload["email"] = datos["email"]
+    
+    return _required_mutation("clientes:crear", payload)
+
+def actualizar_cliente(cliente_id: str, datos: dict):
+    payload = {"id": cliente_id}
+    for key in ("nombre", "telefono", "email"):
+        if key in datos and datos.get(key) is not None:
+            payload[key] = datos.get(key)
+            
+    return _required_mutation("clientes:actualizar", payload)
+
+def desactivar_cliente(cliente_id: str):
+    """Elimina físicamente al cliente de la base de datos del inquilino"""
+    return _required_mutation("clientes:eliminar", {"id": cliente_id})
+
+def get_historial_cliente(cliente_id: str):
+    """Obtiene las ventas vinculadas a un cliente específico"""
+    return _required_query("ventas:listar_por_cliente", {"cliente_id": cliente_id})
+
+# ── CONFIGURACIÓN DEL RESTAURANTE ──
+def get_configuracion():
+    return _required_query("configuracion:listar") or {}
+
+def guardar_configuracion(datos: dict):
+    payload = {}
+    for key in ("nombre_restaurante", "direccion", "telefono", "email", "rfc", "mensaje_ticket", "logo"):
+        if key in datos and datos.get(key) is not None:
+            payload[key] = datos[key]
+    return _required_mutation("configuracion:guardar", payload)
+
+# ── CONFIGURACIÓN DE IMPRESORA ──
+def get_config_impresora():
+    return _required_query("configuracion:listar_impresora") or {}
+
+def guardar_config_impresora(datos: dict):
+    payload = {"ancho_papel": datos.get("ancho_papel", "80")}
+    if datos.get("nombre_impresora"):
+        payload["nombre_impresora"] = datos["nombre_impresora"]
+    if datos.get("mensaje_ticket"):
+        payload["mensaje_ticket"] = datos["mensaje_ticket"]
+    return _required_mutation("configuracion:guardar_impresora", payload)
+
+# ── GESTIÓN DE USUARIOS ──
+def get_usuarios():
+    usuarios = _required_query("configuracion:listar_usuarios") or []
+    return [{"id": u.get("_id") or u.get("id"), **u} for u in usuarios]
+
+def crear_usuario(datos: dict):
+    return _required_mutation("configuracion:crear_usuario", {
+        "nombre": datos["nombre"],
+        "username": datos["username"],
+        "password": datos["password"],
+        "rol": datos.get("rol", "cajero"),
+    })
+
+def cambiar_password_usuario(usuario_id: str, password: str):
+    return _required_mutation("configuracion:cambiar_password", {
+        "id": usuario_id,
+        "password": password,
+    })
+
+def toggle_usuario_activo(usuario_id: str, activo: bool):
+    return _required_mutation("configuracion:toggle_activo", {
+        "id": usuario_id,
+        "activo": activo,
+    })
+
+# ── GESTIÓN DE CATEGORÍAS (edición/borrado) ──
+def actualizar_categoria(categoria_id: str, datos: dict):
+    payload = {"id": categoria_id}
+    for key in ("nombre", "icono", "activo"):
+        if key in datos and datos.get(key) is not None:
+            payload[key] = datos[key]
+    return _required_mutation("configuracion:actualizar_categoria", payload)
+
+def eliminar_categoria(categoria_id: str):
+    return _required_mutation("configuracion:eliminar_categoria", {"id": categoria_id})
+
+# ── DETALLE DE VENTAS ──
+def get_detalle_venta(venta_id: str):
+    detalles = _required_query("detalle_ventas:listar_por_venta", {"venta_id": venta_id}) or []
+    return [
+        {
+            "producto_nombre": d.get("producto_nombre", "Producto eliminado"),
+            "cantidad": d.get("cantidad", 0),
+            "precio_unitario": float(d.get("precio_unitario", 0)),
+            "subtotal": float(d.get("subtotal", 0)),
+        }
+        for d in detalles
+    ]
+
+# ── INVENTARIO (ENTRADAS / COMPRAS) ──
+def get_entradas_inventario(desde: str, hasta: str):
+    entradas = _required_query("inventario:listar", {"desde": desde, "hasta": hasta}) or []
+    return [
+        {
+            "id": e.get("_id") or e.get("id"),
+            "producto_nombre": e.get("producto_nombre", "—"),
+            "cantidad": e.get("cantidad", 0),
+            "costo_unitario": float(e.get("costo_unitario", 0)),
+            "costo_total": float(e.get("costo_total", 0)),
+            "proveedor": e.get("proveedor", ""),
+            "fecha": e.get("fecha", ""),
+        }
+        for e in entradas
+    ]
+
+def crear_entrada_inventario(datos: dict):
+    payload = {
+        "producto_id": datos["producto_id"],
+        "cantidad": float(datos["cantidad"]),
+        "costo_unitario": float(datos["costo_unitario"]),
+        "fecha": datos["fecha"],
+        "actualizar_costo_producto": bool(datos.get("actualizar_costo_producto", False)),
+    }
+    if datos.get("proveedor"):
+        payload["proveedor"] = datos["proveedor"]
+    return _required_mutation("inventario:crear", payload)
+
+# ── PRODUCTOS MÁS VENDIDOS ──
+def get_productos_mas_vendidos(desde: str, hasta: str, limite: int = 10):
+    ventas = get_ventas(desde, hasta)
+    venta_ids = [v["id"] for v in ventas if v.get("id")]
+    if not venta_ids:
+        return []
+    resultado = _required_query(
+        "detalle_ventas:productos_mas_vendidos",
+        {"venta_ids": venta_ids}
+    ) or []
+    return resultado[:limite]

@@ -9,6 +9,7 @@ COLOR_SUBTEXTO = "#a0aec0"
 MENU_ITEMS = [
     ("🏠", "Inicio",        "inicio"),
     ("📦", "Productos",     "productos"),
+    ("📥", "Inventario",    "inventario"),
     ("💰", "Ventas",        "ventas"),
     ("📊", "Reportes",      "reportes"),
     ("🏧", "Caja",          "caja"),

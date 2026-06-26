@@ -33,7 +33,7 @@ def cerrar_sesion():
 def get_modulos_permitidos(rol: str) -> list:
     if rol == "admin":
         return [
-            "inicio", "ventas", "productos",
+            "inicio", "ventas", "productos", "inventario",
             "reportes", "caja", "clientes", "config"
         ]
     elif rol == "cajero":

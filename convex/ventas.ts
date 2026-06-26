@@ -4,12 +4,14 @@ import { v } from "convex/values";
 
 export const listar = query({
   args: {
+    negocio_id: v.id("negocios"),
     desde: v.optional(v.string()),
     hasta: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let ventas = await ctx.db
       .query("ventas")
+      .withIndex("by_negocio", (q) => q.eq("negocio_id", args.negocio_id))
       .order("desc")
       .collect();
 
@@ -27,38 +29,39 @@ export const listar = query({
 
 export const crear = mutation({
   args: {
-    usuario_id:     v.optional(v.string()),
-    cliente_id:     v.optional(v.string()),
+    negocio_id:     v.id("negocios"),
+    usuario_id:     v.optional(v.id("usuarios")),
+    cliente_id:     v.optional(v.id("clientes")),
     total:          v.number(),
     metodo_pago:    v.string(),
     monto_recibido: v.optional(v.number()),
     cambio:         v.optional(v.number()),
     items: v.array(v.object({
-      producto_id:     v.string(),
+      producto_id:     v.id("productos"),
       cantidad:        v.number(),
       precio_unitario: v.number(),
       subtotal:        v.number(),
     })),
   },
   handler: async (ctx, args) => {
-    const { items, ...venta_data } = args;
+    const { items, negocio_id, usuario_id, ...venta_data } = args;
 
     const venta_id = await ctx.db.insert("ventas", {
       ...venta_data,
-      estado: "completada",
+      negocio_id,
     });
 
     for (const item of items) {
-      const producto = await ctx.db.get(
-        item.producto_id as any);
+      const producto = await ctx.db.get(item.producto_id);
       const costo       = producto?.costo || 0;
       const costo_total = costo * item.cantidad;
       const margen      = item.subtotal - costo_total;
 
       await ctx.db.insert("detalle_ventas", {
-        venta_id:        venta_id,
+        negocio_id,
+        venta_id,
         producto_id:     item.producto_id,
-        producto_nombre: producto?.nombre || "",
+        producto_nombre: producto?.nombre || "Producto eliminado",
         cantidad:        item.cantidad,
         precio_unitario: item.precio_unitario,
         costo_unitario:  costo,
@@ -68,7 +71,7 @@ export const crear = mutation({
       });
 
       if (producto) {
-        await ctx.db.patch(item.producto_id as any, {
+        await ctx.db.patch(item.producto_id, {
           stock: producto.stock - item.cantidad,
         });
       }
@@ -79,20 +82,22 @@ export const crear = mutation({
 });
 
 export const resumen_dia = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    negocio_id: v.id("negocios"),
+  },
+  handler: async (ctx, args) => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
-    const ventas = await ctx.db
+    let ventas = await ctx.db
       .query("ventas")
+      .withIndex("by_negocio", (q) => q.eq("negocio_id", args.negocio_id))
       .filter((q) =>
         q.gte(q.field("_creationTime"), hoy.getTime())
       )
       .collect();
 
-    const total    = ventas.reduce(
-      (s, v) => s + v.total, 0);
+    const total    = ventas.reduce((s, v) => s + v.total, 0);
     const efectivo = ventas
       .filter((v) => v.metodo_pago === "efectivo")
       .reduce((s, v) => s + v.total, 0);
@@ -106,5 +111,19 @@ export const resumen_dia = query({
       efectivo,
       tarjeta,
     };
+  },
+});
+
+export const listar_por_cliente = query({
+  args: {
+    negocio_id: v.id("negocios"),
+    cliente_id: v.id("clientes")
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("ventas")
+      .withIndex("by_negocio", (q) => q.eq("negocio_id", args.negocio_id))
+      .filter((q) => q.eq(q.field("cliente_id"), args.cliente_id))
+      .collect();
   },
 });

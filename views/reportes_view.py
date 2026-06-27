@@ -1,3 +1,4 @@
+﻿import base64
 import flet as ft
 from datetime import date
 
@@ -164,9 +165,9 @@ def reportes_view(page: ft.Page):
                             ft.Container(
                                 content=ft.Text("💵 Efectivo" if v["metodo_pago"] == "efectivo" else "💳 Tarjeta", size=11, color="white"),
                                 bgcolor=COLOR_ACENTO if v["metodo_pago"] == "efectivo" else COLOR_AZUL,
-                                border_radius=20, padding=ft.padding.symmetric(horizontal=8, vertical=4)),
+                                border_radius=20, padding=ft.Padding(8, 4, 8, 4)),
                             ft.Text(f"${v['total']:.2f}", size=13, color=COLOR_ACENTO, weight=ft.FontWeight.BOLD, width=80, text_align=ft.TextAlign.RIGHT),
-                            ft.Icon(ft.icons.CHEVRON_RIGHT, color=COLOR_SUBTEXTO, size=18),
+                            ft.Icon(ft.Icons.CHEVRON_RIGHT, color=COLOR_SUBTEXTO, size=18),
                         ],
                         spacing=10
                     ),
@@ -225,7 +226,7 @@ def reportes_view(page: ft.Page):
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
-                bgcolor=COLOR_FONDO, border_radius=12, padding=20, alignment=ft.alignment.center,
+                bgcolor=COLOR_FONDO, border_radius=12, padding=20, alignment=ft.Alignment(0, 0),
             )
         ]
         page.update()
@@ -251,7 +252,7 @@ def reportes_view(page: ft.Page):
     
     # UX FIX: width fijo en lugar de expand=True
     gasto_desc  = ft.TextField(label="Descripción", height=48, width=220)
-    gasto_monto = ft.TextField(label="Monto", prefix_text="$", height=48, width=140, keyboard_type=ft.KeyboardType.NUMBER)
+    gasto_monto = ft.TextField(label="Monto", prefix="$", height=48, width=140, keyboard_type=ft.KeyboardType.NUMBER)
 
     def cargar_gastos():
         d, h = rango()
@@ -263,7 +264,7 @@ def reportes_view(page: ft.Page):
                     content=ft.Row([
                         ft.Container(
                             content=ft.Text(g["categoria"], size=11, color="white"),
-                            bgcolor="#e67e22", border_radius=6, padding=ft.padding.symmetric(horizontal=8, vertical=4)
+                            bgcolor="#e67e22", border_radius=6, padding=ft.Padding(8, 4, 8, 4)
                         ),
                         ft.Text(g["descripcion"], expand=True, size=13),
                         ft.Text(f"${g['monto']:.2f}", weight=ft.FontWeight.BOLD, color=COLOR_ROJO, size=13),
@@ -393,7 +394,7 @@ def reportes_view(page: ft.Page):
 
         if img_base64:
             comparativa_content.controls = [
-                ft.Image(src_base64=img_base64, fit=ft.ImageFit.CONTAIN, expand=True)
+                ft.Image(src=base64.b64decode(img_base64), fit=ft.BoxFit.CONTAIN, expand=True)
             ]
         else:
             comparativa_content.controls = [
@@ -422,7 +423,7 @@ def reportes_view(page: ft.Page):
     # ════════════════ TAB 6: PRODUCTOS TOP ════════════════
     top_tabla = ft.Column(spacing=6)
     top_grafica = ft.Container(
-        alignment=ft.alignment.center,
+        alignment=ft.Alignment(0, 0),
         bgcolor=COLOR_FONDO, border_radius=12, padding=16,
     )
     top_cantidad = ft.Dropdown(
@@ -482,8 +483,8 @@ def reportes_view(page: ft.Page):
         img_base64 = grafica_productos_top(productos)
         if img_base64:
             top_grafica.content = ft.Image(
-                src_base64=img_base64,
-                fit=ft.ImageFit.CONTAIN,
+                src=base64.b64decode(img_base64),
+                fit=ft.BoxFit.CONTAIN,
                 expand=True,
             )
         else:
@@ -533,19 +534,34 @@ def reportes_view(page: ft.Page):
                 ft.Container(
                     expand=True,
                     content=ft.Tabs(
+                        content=ft.Column(
+                            controls=[
+                                ft.TabBar(tabs=[
+                                    ft.Tab(label="Ventas"),
+                                    ft.Tab(label="Margen"),
+                                    ft.Tab(label="Productos Top"),
+                                    ft.Tab(label="Gastos"),
+                                    ft.Tab(label="Merma"),
+                                    ft.Tab(label="Comparativas"),
+                                ]),
+                                ft.TabBarView(
+                                    controls=[ventas_tab, margen_tab, productos_top_tab, gastos_tab, merma_tab, comparativas_tab],
+                                    expand=True,
+                                ),
+                            ],
+                            expand=True,
+                        ),
+                        length=6,
                         selected_index=0,
                         animation_duration=250,
                         expand=True,
-                        tabs=[
-                            ft.Tab(text="Ventas", content=ventas_tab),
-                            ft.Tab(text="Margen", content=margen_tab),
-                            ft.Tab(text="Productos Top", content=productos_top_tab),
-                            ft.Tab(text="Gastos", content=gastos_tab),
-                            ft.Tab(text="Merma", content=merma_tab),
-                            ft.Tab(text="Comparativas", content=comparativas_tab),
-                        ],
                     )
                 ),
             ],
         )
     )
+
+
+
+
+

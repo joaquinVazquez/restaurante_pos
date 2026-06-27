@@ -1,4 +1,4 @@
-# views/caja_view.py
+﻿# views/caja_view.py
 import flet as ft
 import os
 from datetime import datetime, date
@@ -94,7 +94,7 @@ def caja_view(page: ft.Page):
                                 "💵" if v.get("metodo_pago") == "efectivo" else "💳",
                                 size=12, color="white"),
                             bgcolor=COLOR_NARANJA if v.get("metodo_pago") == "efectivo" else COLOR_MORADO,
-                            border_radius=16, padding=ft.padding.symmetric(horizontal=8, vertical=2),
+                            border_radius=16, padding=ft.Padding(8, 2, 8, 2),
                         ),
                         ft.Text(f"${v.get('total', 0):.2f}", size=13, color=COLOR_TEXTO,
                                  weight=ft.FontWeight.BOLD, expand=True, text_align=ft.TextAlign.RIGHT),
@@ -447,7 +447,7 @@ def caja_view(page: ft.Page):
                                     "💵" if v.get("metodo_pago") == "efectivo" else "💳",
                                     size=11, color="white"),
                                 bgcolor=COLOR_NARANJA if v.get("metodo_pago") == "efectivo" else COLOR_MORADO,
-                                border_radius=14, padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                                border_radius=14, padding=ft.Padding(6, 2, 6, 2),
                             ),
                             ft.Text(f"${v.get('total', 0):.2f}", size=13, color=COLOR_TEXTO,
                                      weight=ft.FontWeight.BOLD, expand=True, text_align=ft.TextAlign.RIGHT),
@@ -488,7 +488,7 @@ def caja_view(page: ft.Page):
                         ],
                         spacing=8, tight=True
                     ),
-                    padding=ft.padding.only(top=4),
+                    padding=ft.Padding(0, 4, 0, 0),
                 ),
                 actions=[
                     ft.TextButton(
@@ -613,3 +613,4 @@ def caja_view(page: ft.Page):
         expand=True,
         spacing=0
     )
+

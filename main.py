@@ -1,16 +1,23 @@
-# main.py
+﻿# main.py
 import sys, os, site
+import logging
 
+# 1. Configuración de entorno virtual (UNA SOLA VEZ)
 venv_site_packages = site.getsitepackages()[0]
-if venv_site_packages in sys.path:
-    sys.path.remove(venv_site_packages)
-sys.path.insert(0, venv_site_packages)
+if venv_site_packages not in sys.path:
+    sys.path.insert(0, venv_site_packages)
 
+# Configuración inicial para evitar errores de referencia
+logging.basicConfig(level=logging.INFO)
+
+# 2. Importaciones de librerías
 import flet as ft
 from database.db_manager import verificar_conexion
-from controllers.auth_controller import (
-    cerrar_sesion, get_modulos_permitidos
-)
+from controllers.auth_controller import cerrar_sesion, get_modulos_permitidos
+
+
+
+# 3. Importaciones de Vistas
 from views.login_view import login_view
 from views.sidebar import sidebar
 from views.bottom_nav import bottom_nav
@@ -21,19 +28,6 @@ from views.inventario_view import inventario_view
 from views.reportes_view import reportes_view
 from views.caja_view import caja_view
 from views.clientes_view import clientes_view
-
-
-
-
-# 1. Obtener la ruta de los paquetes instalados en el entorno virtual
-venv_site_packages = site.getsitepackages()[0]
-
-# 2. Mover la ruta del entorno virtual al principio de sys.path
-if venv_site_packages in sys.path:
-    sys.path.remove(venv_site_packages)
-sys.path.insert(0, venv_site_packages)
-
-# 3. Ahora las importaciones de la aplicación (incluyendo Convex)
 from database.db_manager import verificar_conexion
 
 
@@ -41,7 +35,12 @@ COLOR_FONDO      = "#f0f4f8"
 BREAKPOINT_MOVIL = 800
 BOTTOM_NAV_H     = 72
 
-verificar_conexion()
+try:
+    verificar_conexion()
+    logging.info("Conexión a Convex verificada correctamente")
+except Exception:
+    logging.critical("Falló verificar_conexion()", exc_info=True)
+    raise
 
 NAV_ITEMS = {
     "inicio":     ("🏠", "Inicio"),
@@ -143,39 +142,38 @@ def main(page: ft.Page):
         )
         page.update()
 
-        if modulo == "inicio":
-            contenido = inicio_view(
-                page, on_cambiar=cargar_modulo)
-        elif modulo == "ventas":
-            contenido = ventas_view(page)
-        elif modulo == "productos":
-            contenido = productos_view(page)
-        elif modulo == "inventario":
-            contenido = inventario_view(page)
-        elif modulo == "reportes":
-            try:
+        try:
+            if modulo == "inicio":
+                contenido = inicio_view(
+                    page, on_cambiar=cargar_modulo)
+            elif modulo == "ventas":
+                contenido = ventas_view(page)
+            elif modulo == "productos":
+                contenido = productos_view(page)
+            elif modulo == "inventario":
+                contenido = inventario_view(page)
+            elif modulo == "reportes":
                 contenido = reportes_view(page)
-            except Exception as ex:
-                import traceback
-                traceback.print_exc()
-                contenido = ft.Text(f"ERROR: {ex}", color="red", size=14)
-        elif modulo == "caja":
-            contenido = caja_view(page)
-        elif modulo == "clientes":
-            contenido = clientes_view(page)
-        elif modulo == "config":
-            from views.config_view import config_view
-            contenido = config_view(
-                page, usuario_actual=usuario)
-        else:
-            contenido = ft.Column(
-                controls=[
-                    ft.Text(f"Módulo: {modulo}",
-                            size=22,
-                            weight=ft.FontWeight.BOLD),
-                    ft.Text("Próximamente...", size=14),
-                ],
-            )
+            elif modulo == "caja":
+                contenido = caja_view(page)
+            elif modulo == "clientes":
+                contenido = clientes_view(page)
+            elif modulo == "config":
+                from views.config_view import config_view
+                contenido = config_view(
+                    page, usuario_actual=usuario)
+            else:
+                contenido = ft.Column(
+                    controls=[
+                        ft.Text(f"Módulo: {modulo}",
+                                size=22,
+                                weight=ft.FontWeight.BOLD),
+                        ft.Text("Próximamente...", size=14),
+                    ],
+                )
+        except Exception as ex:
+            logging.error(f"Error al cargar módulo '{modulo}'", exc_info=True)
+            contenido = ft.Text(f"ERROR: {ex}", color="red", size=14)
 
         area_contenido.content = contenido
         reconstruir_layout()
@@ -197,11 +195,7 @@ def main(page: ft.Page):
                 controls=[
                     ft.Container(
                         expand=True,
-                        padding=ft.padding.only(
-                            left=12, right=12,
-                            top=12,
-                            bottom=BOTTOM_NAV_H + 12
-                        ),
+                        padding=ft.Padding(12, 12, 12, BOTTOM_NAV_H + 12),
                         clip_behavior=ft.ClipBehavior.HARD_EDGE,
                         content=area_contenido,
                     ),
@@ -250,4 +244,6 @@ def main(page: ft.Page):
     mostrar_login()
 
 
-ft.app(target=main)
+ft.run(main)
+
+

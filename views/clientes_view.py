@@ -1,4 +1,4 @@
-# views/clientes_view.py
+﻿# views/clientes_view.py
 import flet as ft
 from database.db_manager import (
     get_clientes, crear_cliente, actualizar_cliente,
@@ -27,7 +27,7 @@ def clientes_view(page: ft.Page):
             ft.DataColumn(ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
         ],
         rows=[],
-        border=ft.border.all(1, "#e0e0e0"),
+        border=ft.Border(ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0")),
         border_radius=10,
         heading_row_color="#f8f9fa",
         heading_row_height=44,
@@ -71,8 +71,7 @@ def clientes_view(page: ft.Page):
                         ),
                         bgcolor=COLOR_ACENTO,
                         border_radius=20,
-                        padding=ft.padding.symmetric(
-                            horizontal=10, vertical=4)
+                        padding=ft.Padding(10, 4, 10, 4)
                     )),
                     ft.DataCell(ft.Text(
                         f"${c.get('total_gastado', 0):.2f}",
@@ -269,7 +268,7 @@ def clientes_view(page: ft.Page):
             ft.DataColumn(ft.Text("Pago", weight=ft.FontWeight.BOLD)),
         ],
         rows=[],
-        border=ft.border.all(1, "#e0e0e0"),
+        border=ft.Border(ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0")),
         border_radius=10,
         heading_row_color="#f8f9fa",
         heading_row_height=44,
@@ -365,8 +364,7 @@ def clientes_view(page: ft.Page):
                             if v.get("metodo_pago") == "efectivo"
                             else COLOR_AZUL,
                             border_radius=20,
-                            padding=ft.padding.symmetric(
-                                horizontal=10, vertical=4)
+                            padding=ft.Padding(10, 4, 10, 4)
                         )),
                     ])
                 )
@@ -424,3 +422,6 @@ def clientes_view(page: ft.Page):
         expand=True,
         spacing=0
     )
+
+
+

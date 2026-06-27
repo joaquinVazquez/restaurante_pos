@@ -1,4 +1,4 @@
-# views/productos_view.py
+﻿# views/productos_view.py
 import flet as ft
 import shutil
 import os
@@ -38,13 +38,13 @@ def productos_view(page: ft.Page):
         height=100,
         bgcolor=COLOR_FONDO,
         border_radius=10,
-        alignment=ft.alignment.center,
-        border=ft.border.all(1, "#e0e0e0")
+        alignment=ft.Alignment(0, 0),
+        border=ft.Border(ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"))
     )
 
-    def seleccionar_imagen(e: ft.FilePickerResultEvent):
-        if e.files and len(e.files) > 0:
-            archivo = e.files[0]
+    def seleccionar_imagen(files):
+        if files and len(files) > 0:
+            archivo = files[0]
             ruta_origen = archivo.path
             nombre_base = campo_nombre.value.strip().replace(" ", "_") or "producto"
             nombre_archivo = f"{nombre_base}_{archivo.name}"
@@ -56,13 +56,13 @@ def productos_view(page: ft.Page):
                 src=ruta_destino,
                 width=100,
                 height=100,
-                fit=ft.ImageFit.COVER,
-                border_radius=ft.border_radius.all(10)
+                fit=ft.BoxFit.COVER,
+                border_radius=ft.BorderRadius(10, 10, 10, 10)
             )
             page.update()
 
-    file_picker = ft.FilePicker(on_result=seleccionar_imagen)
-    page.overlay.append(file_picker)
+    file_picker = ft.FilePicker()
+    page.services.append(file_picker)
 
     # ── Tabla ──────────────────────────────────────────────
     tabla = ft.DataTable(
@@ -76,7 +76,7 @@ def productos_view(page: ft.Page):
             ft.DataColumn(ft.Text("Acciones", weight=ft.FontWeight.BOLD)),
         ],
         rows=[],
-        border=ft.border.all(1, "#e0e0e0"),
+        border=ft.Border(ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0")),
         border_radius=10,
         vertical_lines=ft.border.BorderSide(1, "#f0f0f0"),
         heading_row_color="#f8f9fa",
@@ -92,8 +92,8 @@ def productos_view(page: ft.Page):
                     src=ruta,
                     width=45,
                     height=45,
-                    fit=ft.ImageFit.COVER,
-                    border_radius=ft.border_radius.all(8)
+                    fit=ft.BoxFit.COVER,
+                    border_radius=ft.BorderRadius(8, 8, 8, 8)
                 ),
                 width=45,
                 height=45,
@@ -106,7 +106,7 @@ def productos_view(page: ft.Page):
             height=45,
             bgcolor=COLOR_FONDO,
             border_radius=8,
-            alignment=ft.alignment.center
+            alignment=ft.Alignment(0, 0)
         )
 
     def refrescar_tabla(busqueda=""):
@@ -140,8 +140,7 @@ def productos_view(page: ft.Page):
                                 ),
                                 bgcolor=stock_color,
                                 border_radius=20,
-                                padding=ft.padding.symmetric(
-                                    horizontal=10, vertical=4)
+                                padding=ft.Padding(10, 4, 10, 4)
                             )
                         ),
                         ft.DataCell(
@@ -152,8 +151,7 @@ def productos_view(page: ft.Page):
                                 ),
                                 bgcolor=COLOR_ACENTO if p["activo"] else COLOR_ROJO,
                                 border_radius=20,
-                                padding=ft.padding.symmetric(
-                                    horizontal=10, vertical=4)
+                                padding=ft.Padding(10, 4, 10, 4)
                             )
                         ),
                         ft.DataCell(
@@ -180,10 +178,10 @@ def productos_view(page: ft.Page):
     # ── Campos del diálogo ─────────────────────────────────
     campo_nombre   = ft.TextField(label="Nombre del producto",
                                    border_radius=8, expand=True)
-    campo_precio   = ft.TextField(label="Precio de venta", prefix_text="$",
+    campo_precio   = ft.TextField(label="Precio de venta", prefix="$",
                                    border_radius=8, width=150,
                                    keyboard_type=ft.KeyboardType.NUMBER)
-    campo_costo    = ft.TextField(label="Costo", prefix_text="$",
+    campo_costo    = ft.TextField(label="Costo", prefix="$",
                                    hint_text="Lo que te cuesta a ti",
                                    border_radius=8, width=150,
                                    keyboard_type=ft.KeyboardType.NUMBER)
@@ -229,9 +227,10 @@ def productos_view(page: ft.Page):
                                 "📁 Seleccionar imagen",
                                 bgcolor=COLOR_AZUL,
                                 color="white",
-                                on_click=lambda e: file_picker.pick_files(
-                                    allowed_extensions=["jpg", "jpeg",
-                                                        "png", "webp"]
+                                on_click=lambda e: seleccionar_imagen(
+                                    file_picker.pick_files(
+                                        allowed_extensions=["jpg", "jpeg", "png", "webp"]
+                                    )
                                 )
                             )
                         ],
@@ -289,8 +288,8 @@ def productos_view(page: ft.Page):
             preview_imagen.content = ft.Image(
                 src=prod["imagen"],
                 width=100, height=100,
-                fit=ft.ImageFit.COVER,
-                border_radius=ft.border_radius.all(10)
+                fit=ft.BoxFit.COVER,
+                border_radius=ft.BorderRadius(10, 10, 10, 10)
             )
         else:
             preview_imagen.content = ft.Text("Sin imagen",
@@ -468,3 +467,16 @@ def productos_view(page: ft.Page):
         expand=True,
         spacing=0
     )
+
+
+
+
+
+
+
+
+
+
+
+
+

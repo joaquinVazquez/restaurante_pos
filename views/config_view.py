@@ -1,4 +1,4 @@
-# views/config_view.py
+﻿# views/config_view.py
 import flet as ft
 from database.db_manager import (
     get_configuracion, guardar_configuracion,
@@ -52,19 +52,19 @@ def config_view(page: ft.Page, usuario_actual: dict = None):
         content=ft.Image(
             src=logo_actual["ruta"],
             width=80, height=80,
-            fit=ft.ImageFit.CONTAIN
+            fit=ft.BoxFit.CONTAIN
         ) if logo_actual["ruta"] and os.path.exists(logo_actual["ruta"])
         else ft.Text("🍽️", size=40),
         width=90, height=90,
         bgcolor=COLOR_FONDO,
         border_radius=12,
-        alignment=ft.alignment.center,
-        border=ft.border.all(1, "#e0e0e0")
+        alignment=ft.Alignment(0, 0),
+        border=ft.Border(ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"), ft.BorderSide(1, "#e0e0e0"))
     )
 
-    def seleccionar_logo(e: ft.FilePickerResultEvent):
-        if e.files and len(e.files) > 0:
-            archivo = e.files[0]
+    def seleccionar_logo(files):
+        if files and len(files) > 0:
+            archivo = files[0]
             os.makedirs(RUTA_LOGO, exist_ok=True)
             ruta_destino = os.path.join(
                 RUTA_LOGO, f"logo_{archivo.name}")
@@ -73,14 +73,14 @@ def config_view(page: ft.Page, usuario_actual: dict = None):
             preview_logo.content = ft.Image(
                 src=ruta_destino,
                 width=80, height=80,
-                fit=ft.ImageFit.CONTAIN
+                fit=ft.BoxFit.CONTAIN
             )
             guardar_configuracion({"logo": ruta_destino})
             snack("✅ Logo actualizado")
             page.update()
 
-    file_picker_logo = ft.FilePicker(on_result=seleccionar_logo)
-    page.overlay.append(file_picker_logo)
+    file_picker_logo = ft.FilePicker()
+    page.services.append(file_picker_logo)
     nombre    = ft.TextField(label="Nombre del restaurante",
                               value=config.get(
                                   "nombre_restaurante", ""),
@@ -144,12 +144,11 @@ def config_view(page: ft.Page, usuario_actual: dict = None):
                                     "📁 Subir logo",
                                     bgcolor=COLOR_ACENTO,
                                     color="white",
-                                    on_click=lambda e:
+                                    on_click=lambda e: seleccionar_logo(
                                         file_picker_logo.pick_files(
-                                            allowed_extensions=[
-                                                "jpg", "jpeg",
-                                                "png"]
+                                            allowed_extensions=["jpg", "jpeg", "png"]
                                         )
+                                    )
                                 )
                             ],
                             spacing=4
@@ -225,7 +224,7 @@ def config_view(page: ft.Page, usuario_actual: dict = None):
                                 else COLOR_ROJO
                             ),
                             ft.IconButton(
-                                icon=ft.icons.LOCK_RESET,
+                                icon=ft.Icons.LOCK_RESET,
                                 tooltip="Cambiar contraseña",
                                 on_click=lambda e, usr=u:
                                     abrir_dialogo_password(usr)
@@ -356,12 +355,12 @@ def config_view(page: ft.Page, usuario_actual: dict = None):
                                     size=14,
                                     weight=ft.FontWeight.BOLD),
                             ft.IconButton(
-                                icon=ft.icons.EDIT,
+                                icon=ft.Icons.EDIT,
                                 on_click=lambda e, cat=c:
                                     abrir_editar_cat(cat)
                             ),
                             ft.IconButton(
-                                icon=ft.icons.DELETE,
+                                icon=ft.Icons.DELETE,
                                 icon_color=COLOR_ROJO,
                                 on_click=lambda e, cat=c:
                                     eliminar_cat(cat)
@@ -519,19 +518,34 @@ def config_view(page: ft.Page, usuario_actual: dict = None):
                     weight=ft.FontWeight.BOLD,
                     color=COLOR_TEXTO),
             ft.Tabs(
+                content=ft.Column(
+                    controls=[
+                        ft.TabBar(tabs=[
+                            ft.Tab(label="Restaurante"),
+                            ft.Tab(label="Usuarios"),
+                            ft.Tab(label="Categorias"),
+                            ft.Tab(label="Impresora"),
+                        ]),
+                        ft.TabBarView(
+                            controls=[restaurante_tab, usuarios_tab, categorias_tab, impresora_tab],
+                            expand=True,
+                        ),
+                    ],
+                    expand=True,
+                ),
+                length=4,
                 selected_index=0,
                 animation_duration=250,
                 expand=True,
-                tabs=[
-                    ft.Tab(text="Restaurante",
-                           content=restaurante_tab),
-                    ft.Tab(text="Usuarios",
-                           content=usuarios_tab),
-                    ft.Tab(text="Categorías",
-                           content=categorias_tab),
-                    ft.Tab(text="Impresora",
-                           content=impresora_tab),
-                ],
             ),
         ],
     )
+
+
+
+
+
+
+
+
+

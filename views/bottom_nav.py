@@ -1,4 +1,4 @@
-# views/bottom_nav.py
+﻿# views/bottom_nav.py
 import flet as ft
 
 COLOR_BG     = "#1a1f2e"
@@ -58,7 +58,7 @@ def bottom_nav(page: ft.Page, modulo_activo: str,
     return ft.Container(
         height=72,
         bgcolor=COLOR_BG,
-        padding=ft.padding.symmetric(horizontal=4, vertical=4),
+        padding=ft.Padding(4, 4, 4, 4),
         shadow=ft.BoxShadow(
             blur_radius=8,
             color="#00000030",
@@ -71,3 +71,4 @@ def bottom_nav(page: ft.Page, modulo_activo: str,
             spacing=0,
         ),
     )
+

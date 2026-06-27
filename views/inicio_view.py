@@ -1,4 +1,4 @@
-import flet as ft
+﻿import flet as ft
 from database.db_manager import get_resumen_dia
 
 COLOR_TEXTO    = "#2c3e50"
@@ -61,52 +61,54 @@ def inicio_view(page: ft.Page, on_cambiar=None):
             border_radius=14,
             padding=20,
             expand=True,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment(0, 0),
             on_click=lambda e, m=modulo: navegar(m),
         )
 
-    # Configuración de la Gráfica de Distribución
-    grafica_ingresos = ft.Container(
-        content=ft.Column([
-            ft.Text("Distribución de Ingresos", size=15, weight=ft.FontWeight.BOLD, color=COLOR_TEXTO),
-            ft.Divider(),
-            ft.Container(
-                content=ft.PieChart(
-                    sections=[
-                        ft.PieChartSection(
-                            value=pct_efectivo if pct_efectivo > 0 else 1, # Renderizado mínimo si es 0
-                            title=f"{pct_efectivo:.1f}%" if pct_efectivo > 0 else "",
-                            color=COLOR_ACENTO,
-                            radius=50,
-                            title_style=ft.TextStyle(size=12, color=ft.colors.WHITE, weight=ft.FontWeight.BOLD),
-                        ),
-                        ft.PieChartSection(
-                            value=pct_tarjeta if pct_tarjeta > 0 else 1,
-                            title=f"{pct_tarjeta:.1f}%" if pct_tarjeta > 0 else "",
-                            color=COLOR_AZUL,
-                            radius=50,
-                            title_style=ft.TextStyle(size=12, color=ft.colors.WHITE, weight=ft.FontWeight.BOLD),
-                        ),
+    def barra_ingreso(titulo, monto, porcentaje, color):
+        ancho = max(1, porcentaje)
+        return ft.Column(
+            controls=[
+                ft.Row(
+                    controls=[
+                        ft.Text(titulo, size=12, color=COLOR_TEXTO, weight=ft.FontWeight.BOLD),
+                        ft.Text(f"${monto:.2f} - {porcentaje:.1f}%", size=12, color=COLOR_SUBTEXTO),
                     ],
-                    sections_space=2,
-                    center_space_radius=40,
-                    expand=True,
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
-                height=200,
-                padding=10
-            ),
-            ft.Row([
-                ft.Row([ft.Icon(ft.icons.CIRCLE, color=COLOR_ACENTO, size=12), ft.Text("Efectivo", size=12, color=COLOR_SUBTEXTO)]),
-                ft.Row([ft.Icon(ft.icons.CIRCLE, color=COLOR_AZUL, size=12), ft.Text("Tarjeta", size=12, color=COLOR_SUBTEXTO)])
-            ], alignment=ft.MainAxisAlignment.CENTER)
-        ]),
+                ft.Container(
+                    content=ft.Row(
+                        controls=[
+                            ft.Container(bgcolor=color, height=12, width=ancho * 2.4, border_radius=6),
+                        ]
+                    ),
+                    bgcolor="#eef2f5",
+                    border_radius=6,
+                    height=12,
+                    width=240,
+                ),
+            ],
+            spacing=6,
+        )
+
+    grafica_ingresos = ft.Container(
+        content=ft.Column(
+            controls=[
+                ft.Text("Distribucion de Ingresos", size=15, weight=ft.FontWeight.BOLD, color=COLOR_TEXTO),
+                ft.Divider(),
+                ft.Container(height=14),
+                barra_ingreso("Efectivo", efectivo, pct_efectivo, COLOR_ACENTO),
+                ft.Container(height=10),
+                barra_ingreso("Tarjeta", tarjeta, pct_tarjeta, COLOR_AZUL),
+            ],
+            spacing=8,
+        ),
         bgcolor=COLOR_TARJETA,
         border_radius=14,
         padding=20,
         expand=True,
         shadow=ft.BoxShadow(blur_radius=8, color="#00000015", offset=ft.Offset(0, 2))
     )
-
     return ft.Column(
         controls=[
             ft.Text("Dashboard Operativo", size=22, weight=ft.FontWeight.BOLD, color=COLOR_TEXTO),
@@ -159,3 +161,6 @@ def inicio_view(page: ft.Page, on_cambiar=None):
         spacing=8,
         scroll=ft.ScrollMode.AUTO
     )
+
+
+

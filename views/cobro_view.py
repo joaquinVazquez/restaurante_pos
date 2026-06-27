@@ -1,4 +1,4 @@
-import flet as ft
+﻿import flet as ft
 import os
 from datetime import datetime
 # CAMBIO 1: Importamos actualizar_producto para controlar el inventario
@@ -37,14 +37,14 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada, cliente_id=None, cli
                 ),
                 bgcolor=COLOR_FONDO,
                 border_radius=8,
-                padding=ft.padding.symmetric(horizontal=12, vertical=8)
+                padding=ft.Padding(12, 8, 12, 8)
             )
         )
 
     # ── Campo monto ────────────────────────────────────────
     campo_monto = ft.TextField(
         label="Monto recibido",
-        prefix_text="$",
+        prefix="$",
         keyboard_type=ft.KeyboardType.NUMBER,
         border_radius=8,
         expand=True,
@@ -336,3 +336,5 @@ def cobro_view(page: ft.Page, carrito, on_venta_completada, cliente_id=None, cli
         ],
         expand=True, spacing=0
     )
+
+

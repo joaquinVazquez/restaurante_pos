@@ -1,4 +1,4 @@
-import os
+﻿import os
 from dotenv import load_dotenv
 from convex import ConvexClient
 from datetime import date, datetime
@@ -7,7 +7,7 @@ from datetime import date, datetime
 load_dotenv()
 
 # 2. Leer la URL
-CONVEX_URL = os.getenv("CONVEX_URL")
+CONVEX_URL = os.getenv("CONVEX_URL") or "https://sleek-raven-472.convex.cloud"
 
 if not CONVEX_URL:
     raise ValueError("La variable CONVEX_URL no está definida en el archivo .env")

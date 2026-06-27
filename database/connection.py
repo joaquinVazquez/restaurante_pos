@@ -1,4 +1,4 @@
-# database/connection.py
+﻿# database/connection.py
 import sqlite3
 from pathlib import Path
 

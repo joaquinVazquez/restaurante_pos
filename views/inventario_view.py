@@ -1,4 +1,4 @@
-# views/inventario_view.py
+﻿# views/inventario_view.py
 import flet as ft
 from datetime import date
 from database.db_manager import (
@@ -55,7 +55,7 @@ def inventario_view(page: ft.Page):
         keyboard_type=ft.KeyboardType.NUMBER,
     )
     campo_costo_unitario = ft.TextField(
-        label="Costo unitario", prefix_text="$", width=160,
+        label="Costo unitario", prefix="$", width=160,
         keyboard_type=ft.KeyboardType.NUMBER,
     )
     campo_proveedor = ft.TextField(
@@ -249,15 +249,27 @@ def inventario_view(page: ft.Page):
                 ft.Container(
                     expand=True,
                     content=ft.Tabs(
+                        content=ft.Column(
+                            controls=[
+                                ft.TabBar(tabs=[
+                                    ft.Tab(label="Nueva Entrada"),
+                                    ft.Tab(label="Historial"),
+                                ]),
+                                ft.TabBarView(
+                                    controls=[formulario_tab, historial_tab],
+                                    expand=True,
+                                ),
+                            ],
+                            expand=True,
+                        ),
+                        length=2,
                         selected_index=0,
                         animation_duration=250,
                         expand=True,
-                        tabs=[
-                            ft.Tab(text="Nueva Entrada", content=formulario_tab),
-                            ft.Tab(text="Historial", content=historial_tab),
-                        ],
                     ),
                 ),
             ],
         ),
     )
+
+

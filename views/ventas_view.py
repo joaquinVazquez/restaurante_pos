@@ -1,4 +1,4 @@
-# views/ventas_view.py
+﻿# views/ventas_view.py
 import flet as ft
 from controllers.ventas_controller import obtener_categorias, obtener_productos, Carrito
 from database.db_manager import get_clientes
@@ -105,7 +105,7 @@ def ventas_view(page: ft.Page):
         label="Cliente",
         hint_text="Sin cliente (venta general)",
         options=opciones_clientes,
-        on_change=cambiar_cliente,
+        on_select=cambiar_cliente,
         height=48,
     )
 
@@ -177,7 +177,7 @@ def ventas_view(page: ft.Page):
                     ),
                     bgcolor=COLOR_PRIMARIO,
                     border_radius=8,
-                    padding=ft.padding.symmetric(horizontal=8, vertical=4)
+                    padding=ft.Padding(8, 4, 8, 4)
                 )
             )
         lbl_total.value = f"${carrito.total():.2f}"
@@ -320,3 +320,5 @@ def ventas_view(page: ft.Page):
         expand=True,
         spacing=14
     )
+
+

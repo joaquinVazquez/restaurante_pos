@@ -1,4 +1,4 @@
-# utils/graficas.py
+﻿# utils/graficas.py
 """
 Módulo auxiliar para generar gráficas con Matplotlib y devolverlas
 como imágenes en memoria (base64), listas para usarse en ft.Image(src_base64=...).

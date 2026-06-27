@@ -1,4 +1,4 @@
-# views/sidebar.py
+﻿# views/sidebar.py
 import flet as ft
 
 COLOR_SIDEBAR  = "#1a1f2e"
@@ -47,8 +47,7 @@ def sidebar(page: ft.Page, modulo_activo: str,
             ),
             bgcolor=COLOR_ACTIVO if activo else "transparent",
             border_radius=10,
-            padding=ft.padding.symmetric(
-                horizontal=14, vertical=10),
+            padding=ft.Padding(14, 10, 14, 10),
             on_click=lambda e, m=modulo: on_cambiar(m),
         )
 
@@ -78,7 +77,7 @@ def sidebar(page: ft.Page, modulo_activo: str,
                         ],
                         spacing=8
                     ),
-                    padding=ft.padding.only(bottom=20)
+                    padding=ft.Padding(0, 0, 0, 20)
                 ),
                 ft.Container(
                     content=ft.Row(
@@ -95,8 +94,7 @@ def sidebar(page: ft.Page, modulo_activo: str,
                     ),
                     bgcolor=COLOR_ACTIVO,
                     border_radius=10,
-                    padding=ft.padding.symmetric(
-                        horizontal=14, vertical=12),
+                    padding=ft.Padding(14, 12, 14, 12),
                     on_click=lambda e: on_cambiar("ventas"),
                 ),
                 ft.Container(height=16),
@@ -133,7 +131,7 @@ def sidebar(page: ft.Page, modulo_activo: str,
                                 expand=True
                             ),
                             ft.IconButton(
-                                icon=ft.icons.LOGOUT,
+                                icon=ft.Icons.LOGOUT,
                                 icon_color=COLOR_SUBTEXTO,
                                 icon_size=18,
                                 tooltip="Cerrar sesión",
@@ -144,7 +142,7 @@ def sidebar(page: ft.Page, modulo_activo: str,
                         ],
                         spacing=8
                     ),
-                    padding=ft.padding.only(top=8)
+                    padding=ft.Padding(0, 8, 0, 0)
                 )
             ],
             expand=True,
@@ -155,3 +153,6 @@ def sidebar(page: ft.Page, modulo_activo: str,
         padding=16,
         expand=False
     )
+
+
+
